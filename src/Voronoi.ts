@@ -72,6 +72,7 @@ export class Voronoi {
     b.circleEvent = ce;
 
     this.addEvent(ce);
+    console.log("Circle event added", ce, "for arc", b);
   }
 
   private handleCircleEvent(ce: CircleEvent): void {
@@ -125,12 +126,15 @@ export class Voronoi {
     }
 
     const ev = this.pollEvent();
+    console.log("Event polled", ev);
+
     if (!ev) return false;
 
     this.sweepY = ev.y;
 
     if (ev instanceof SiteEvent) {
       this.handleSiteEvent(ev);
+      console.log("Site handled", ev, "beachline", this.beachlineToString(this.beachRoot));
     } else if (ev instanceof CircleEvent) {
       const ce = ev as CircleEvent;
       const arc = ce.arc;
@@ -213,6 +217,26 @@ export class Voronoi {
     right.edgeOrientation = arc.edgeOrientation;
 
     this.checkCircle(p.y, left.prev, left, center);
-    this.checkCircle(p.y, left, right, right.next);
+    this.checkCircle(p.y, center, right, right.next);
+  }
+
+  private beachlineToString(head: Arc | null): string {
+    if (!head) return "[]";
+
+    let sb = "[";
+    let a: Arc | null = head;
+    let first = true;
+
+    while (a) {
+      if (!first) sb += " -> ";
+
+      sb += `(${a.site.x.toFixed(3)}, ${a.site.y.toFixed(3)})`;
+
+      first = false;
+      a = a.next ?? null;
+    }
+
+    sb += "]";
+    return sb;
   }
 }
