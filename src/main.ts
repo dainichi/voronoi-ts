@@ -44,6 +44,10 @@ function resizeCanvas(): void {
     draw();
 }
 
+function worldToScreen(p: Point): Point {
+    return new Point(worldToScreenX(p.x), worldToScreenY(p.y));
+}
+
 function worldToScreenX(x: number): number {
     return state.offsetX + x * state.scale;
 }
@@ -64,10 +68,9 @@ function findSiteIndexAtScreen(x: number, y: number): number {
     const threshold = 10;
     for (let i = state.sites.length - 1; i >= 0; i--) {
         const site = state.sites[i];
-        const sx = worldToScreenX(site.x);
-        const sy = worldToScreenY(site.y);
-        const dx = sx - x;
-        const dy = sy - y;
+        const s = worldToScreen(site);
+        const dx = s.x - x;
+        const dy = s.y - y;
         if (dx * dx + dy * dy <= threshold * threshold) {
             return i;
         }
@@ -204,30 +207,23 @@ function drawEdges(ctx: CanvasRenderingContext2D): void {
         }
         const A = edge.leftSite;
         const B = edge.rightSite;
-        const dx = B.x - A.x;
-        const dy = B.y - A.y;
-        let rx = -dy;
-        let ry = dx;
-        let ox: number, oy: number, rdx: number, rdy: number;
+        let o: Point, rdx: number, rdy: number;
         if (edge.start) {
-            ox = edge.start.x;
-            oy = edge.start.y;
-            rdx = rx;
-            rdy = ry;
+            o = edge.start;
+            rdx = A.y - B.y;
+            rdy = B.x - A.x;
         } else if (edge.end) {
-            ox = edge.end.x;
-            oy = edge.end.y;
-            rdx = -rx;
-            rdy = -ry;
+            o = edge.end;
+            rdx = B.y - A.y;
+            rdy = A.x - B.x;
         } else {
             console.warn("Edge with no start or end", edge);
             return;
         }
-        const far = extendRayToBounds(ox, oy, rdx, rdy, bounds);
+        const far = extendRayToBounds(o, new Point(rdx, rdy), bounds);
         if (far) {
-            drawLine(ctx, new Point(ox, oy), new Point(far[0], far[1]));
+            drawLine(ctx, o, far);
         }
-
     });
     ctx.restore();
 }
@@ -239,49 +235,32 @@ function drawLine(ctx: CanvasRenderingContext2D, a: Point, b: Point): void {
     ctx.stroke();
 }
 
-function extendRayToBounds(px: number, py: number, dx: number, dy: number, bounds: { minX: number; minY: number; maxX: number; maxY: number }): [number, number] | null {
-    const tValues: number[] = [];
-    if (Math.abs(dx) > 1e-9) {
-        [bounds.minX, bounds.maxX].forEach((x) => {
-            const t = (x - px) / dx;
-            if (t > 0) {
-                const y = py + t * dy;
-                if (y >= bounds.minY - 1e-6 && y <= bounds.maxY + 1e-6) {
-                    tValues.push(t);
-                }
-            }
-        });
+//calculate the point at which the ray starting at p in the direction of d exits the bounding box defined by bounds
+function extendRayToBounds(p: Point, d: Point, bounds: { minX: number; minY: number; maxX: number; maxY: number }): Point | null {
+    let t = Infinity;
+    if (Math.abs(d.x) > 1e-9) {
+        const tMaxX = (bounds.maxX - p.x) / d.x;
+        const tMinX = (bounds.minX - p.x) / d.x;
+        const tX = Math.max(tMaxX, tMinX);
+        if (tX > 0) { t = tX; }
     }
-    if (Math.abs(dy) > 1e-9) {
-        [bounds.minY, bounds.maxY].forEach((y) => {
-            const t = (y - py) / dy;
-            if (t > 0) {
-                const x = px + t * dx;
-                if (x >= bounds.minX - 1e-6 && x <= bounds.maxX + 1e-6) {
-                    tValues.push(t);
-                }
-            }
-        });
+    if (Math.abs(d.y) > 1e-9) {
+        const tMaxY = (bounds.maxY - p.y) / d.y;
+        const tMinY = (bounds.minY - p.y) / d.y; 
+        const tY = Math.max(tMaxY, tMinY);
+        if (tY > 0 && tY < t) { t = tY; }
     }
-    if (tValues.length === 0) return null;
-    let tmin = Number.POSITIVE_INFINITY;
-    for (const t of tValues) {
-        if (t > 0 && t < tmin) {
-            tmin = t;
-        }
-    }
-    if (!Number.isFinite(tmin)) return null;
-    return [px + tmin * dx, py + tmin * dy];
+    if (!Number.isFinite(t)) return null;
+    return new Point(p.x + t * d.x, p.y + t * d.y);
 }
 
 function drawSites(ctx: CanvasRenderingContext2D): void {
     ctx.save();
     state.sites.forEach((site, index) => {
-        const sx = worldToScreenX(site.x);
-        const sy = worldToScreenY(site.y);
+        const s = worldToScreen(site);
         ctx.fillStyle = index === state.selectedIndex ? "#0047ab" : "#d92b2b";
         ctx.beginPath();
-        ctx.arc(sx, sy, 6, 0, Math.PI * 2);
+        ctx.arc(s.x, s.y, 6, 0, Math.PI * 2);
         ctx.fill();
         ctx.strokeStyle = "#fff";
         ctx.lineWidth = 2;
