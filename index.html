@@ -2,11 +2,156 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Voronoi</title>
+    <title>Voronoi Viewer</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: system-ui, sans-serif;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #app {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            width: 100%;
+            height: 100%;
+        }
+        #canvas-container {
+            position: relative;
+            background: #f6f6f6;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            cursor: crosshair;
+        }
+        #panel {
+            box-sizing: border-box;
+            padding: 16px;
+            border-left: 1px solid #ddd;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            overflow: hidden;
+        }
+        #panel h1 {
+            margin: 0 0 12px;
+            font-size: 1.1rem;
+        }
+        .section {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .section-title {
+            font-weight: 600;
+            font-size: 0.95rem;
+            margin-bottom: 4px;
+        }
+        #point-list,
+        #vertex-list {
+            flex: 1;
+            overflow: auto;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 8px;
+            background: #fafafa;
+        }
+        .list-item {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 6px 8px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        .list-item:hover {
+            background: #eef4ff;
+        }
+        .list-item.selected {
+            background: #dce7ff;
+        }
+        .list-item span {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #add-form {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        #coordinate-input {
+            flex: 1;
+            padding: 8px;
+            font-size: 0.95rem;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+        }
+        button {
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            background: #fff;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        button:hover {
+            background: #f0f0f0;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: default;
+        }
+        #instructions {
+            font-size: 0.9rem;
+            color: #555;
+            line-height: 1.4;
+        }
+        #footer {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 8px;
+        }
+    </style>
 </head>
 <body>
-    <canvas id="canvas" width="800" height="600"></canvas>
-
+    <div id="app">
+        <div id="canvas-container">
+            <canvas id="canvas"></canvas>
+        </div>
+        <aside id="panel">
+            <div>
+                <h1>Voronoi Viewer</h1>
+                <div id="instructions">
+                    Left click to add a point.
+                    Drag a point to move it.
+                    Right click a point to delete it.
+                    Ctrl + drag to pan.
+                    Scroll to zoom.
+                </div>
+            </div>
+            <div class="section">
+                <div class="section-title">Points</div>
+                <div id="point-list"></div>
+                <div id="add-form">
+                    <input id="coordinate-input" placeholder="x,y or x y" />
+                    <button id="add-point-btn">Add</button>
+                </div>
+            </div>
+            <div class="section">
+                <div class="section-title">Vertices</div>
+                <div id="vertex-list"></div>
+            </div>
+            <div id="footer">
+                Points are shown in world coordinates. Selected point is highlighted.
+            </div>
+        </aside>
+    </div>
     <script type="module" src="dist/main.js"></script>
 </body>
 </html>

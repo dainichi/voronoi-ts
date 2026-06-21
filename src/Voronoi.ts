@@ -44,7 +44,7 @@ export class Voronoi {
 
     const area = (B.x - A.x) * (C.y - A.y) - (B.y - A.y) * (C.x - A.x);
 
-    if (Math.abs(area) < Voronoi.EPS) return;
+    if (area > -Voronoi.EPS) return;
 
     const d = 2 * (A.x * (B.y - C.y) + B.x * (C.y - A.y) + C.x * (A.y - B.y));
 
@@ -79,18 +79,18 @@ export class Voronoi {
     const a = ce.arc;
     const vertex = ce.center;
 
-    if (a.prev == null || a.prev.rightEdge == null) {
-      console.warn("Circle event with null prev arc", ce);
+    if (!a.prev || !a.prev.rightEdge) {
+      console.warn("Circle event with undefined prev arc", ce);
     } else {
       if (a.prev?.edgeOrientation) a.prev.rightEdge.end = vertex;
-      else if (a.prev) a.prev.rightEdge.start = vertex;
+      else a.prev.rightEdge.start = vertex;
     }
 
-    if (a.rightEdge == null) {
-      console.warn("Circle event with null right edge", ce);
+    if (!a.rightEdge) {
+      console.warn("Circle event with undefined right edge", ce);
     } else {
-      if (a.edgeOrientation) a.rightEdge.start = vertex;
-      else a.rightEdge.end = vertex;
+      if (a.edgeOrientation) a.rightEdge.end = vertex;
+      else a.rightEdge.start = vertex;
     }
 
     const left = a.prev!;
