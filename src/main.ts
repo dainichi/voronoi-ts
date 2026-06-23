@@ -1,6 +1,8 @@
 import { Point } from "./Point.js";
 import { Edge } from "./Edge.js";
 import { Voronoi } from "./Voronoi.js";
+import { Geometry } from "./Geometry.js";
+import type { Arc } from "./Arc.js";
 
 type DragMode = "none" | "move" | "pan";
 
@@ -9,6 +11,15 @@ const pointList = document.getElementById("point-list")!;
 const vertexList = document.getElementById("vertex-list")!;
 const coordinateInput = document.getElementById("coordinate-input") as HTMLInputElement;
 const addPointBtn = document.getElementById("add-point-btn") as HTMLButtonElement;
+const resetBtn = document.getElementById("reset-btn") as HTMLButtonElement;
+const stepBtn = document.getElementById("step-btn") as HTMLButtonElement;
+const runToEndBtn = document.getElementById("run-to-end-btn") as HTMLButtonElement;
+const togglePanelBtn = document.getElementById("toggle-panel-btn") as HTMLButtonElement;
+const panel = document.getElementById("panel")!;
+
+const app = document.getElementById("app")!;
+let lastCanvasWidth = 0;
+let lastCanvasHeight = 0;
 
 const state = {
     sites: [
@@ -28,19 +39,38 @@ const state = {
     scale: 1,
     voronoi: new Voronoi([]),
     vertices: [] as Point[],
+    algorithmComplete: false,
     pendingClick: false,
     clickStartX: 0,
     clickStartY: 0
 };
 
-function resizeCanvas(): void {
+function resizeCanvas(preserveCenter = true): void {
     const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * window.devicePixelRatio;
-    canvas.height = rect.height * window.devicePixelRatio;
-    canvas.style.width = `${rect.width}px`;
-    canvas.style.height = `${rect.height}px`;
+    const newWidth = rect.width;
+    const newHeight = rect.height;
+
+    let centerWorldX: number | null = null;
+    let centerWorldY: number | null = null;
+    if (preserveCenter && lastCanvasWidth > 0 && lastCanvasHeight > 0) {
+        centerWorldX = screenToWorldX(lastCanvasWidth / 2);
+        centerWorldY = screenToWorldY(lastCanvasHeight / 2);
+    }
+
+    canvas.width = newWidth * window.devicePixelRatio;
+    canvas.height = newHeight * window.devicePixelRatio;
+    canvas.style.width = `${newWidth}px`;
+    canvas.style.height = `${newHeight}px`;
     const ctx = canvas.getContext("2d");
     if (ctx) ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
+
+    if (centerWorldX !== null && centerWorldY !== null) {
+        state.offsetX = newWidth / 2 - centerWorldX * state.scale;
+        state.offsetY = newHeight / 2 + centerWorldY * state.scale;
+    }
+
+    lastCanvasWidth = newWidth;
+    lastCanvasHeight = newHeight;
     draw();
 }
 
@@ -81,22 +111,23 @@ function findSiteIndexAtScreen(x: number, y: number): number {
 function addSite(point: Point): void {
     state.sites.push(point);
     state.selectedIndex = state.sites.length - 1;
-    recompute();
+    resetAlgorithm();
 }
 
 function removeSite(index: number): void {
     if (index < 0 || index >= state.sites.length) return;
     state.sites.splice(index, 1);
     state.selectedIndex = Math.min(state.selectedIndex, state.sites.length - 1);
-    recompute();
+    resetAlgorithm();
 }
 
-function recompute(): void {
+function resetAlgorithm(): void {
     state.voronoi = new Voronoi(state.sites.map((s) => new Point(s.x, s.y)));
-    state.voronoi.compute();
+    state.algorithmComplete = false;
     state.vertices = extractVertices();
     updatePointList();
     updateVertexList();
+    updateToolbarButtons();
     draw();
 }
 
@@ -111,6 +142,39 @@ function extractVertices(): Point[] {
         }
     });
     return Array.from(points.values());
+}
+
+function updateToolbarButtons(): void {
+    stepBtn.disabled = state.algorithmComplete || state.sites.length === 0;
+    runToEndBtn.disabled = state.algorithmComplete || state.sites.length === 0;
+}
+
+function stepAlgorithm(): void {
+    if (state.algorithmComplete) return;
+    if (!state.voronoi.step()) {
+        state.algorithmComplete = true;
+    }
+    state.vertices = extractVertices();
+    updateVertexList();
+    updateToolbarButtons();
+    draw();
+}
+
+function runAlgorithmToEnd(): void {
+    if (state.algorithmComplete) return;
+    while (state.voronoi.step()) {}
+    state.algorithmComplete = true;
+    state.vertices = extractVertices();
+    updateVertexList();
+    updateToolbarButtons();
+    draw();
+}
+
+function togglePanel(): void {
+    const hidden = panel.classList.toggle("hidden");
+    app.classList.toggle("panel-hidden", hidden);
+    togglePanelBtn.textContent = hidden ? "Show panel" : "Hide panel";
+    window.requestAnimationFrame(() => resizeCanvas(true));
 }
 
 function updatePointList(): void {
@@ -184,7 +248,16 @@ function draw(): void {
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, rect.width, rect.height);
 
+    const sweepY = state.voronoi.sweepY;
+    const isIntermediate = Number.isFinite(sweepY) && sweepY !== Infinity;
+
     drawEdges(ctx);
+    if (isIntermediate) {
+        drawSweepLine(ctx, sweepY);
+        drawCircleEvents(ctx);
+        drawBeachLine(ctx);
+    }
+    drawProcessedCenters(ctx);
     drawSites(ctx);
 }
 
@@ -199,31 +272,58 @@ function drawEdges(ctx: CanvasRenderingContext2D): void {
         minY: screenToWorldY(rect.height),
         maxY: screenToWorldY(0)
     };
-    console.log("Drawing edges for", state.voronoi, "with bounds", bounds);
+    const sweepY = state.voronoi.sweepY;
+    const finalState = !Number.isFinite(sweepY) && sweepY < 0;
     state.voronoi.edges.forEach((edge) => {
         if (edge.start && edge.end) {
             drawLine(ctx, edge.start, edge.end);
             return;
         }
-        const A = edge.leftSite;
-        const B = edge.rightSite;
-        let o: Point, rdx: number, rdy: number;
-        if (edge.start) {
-            o = edge.start;
-            rdx = A.y - B.y;
-            rdy = B.x - A.x;
-        } else if (edge.end) {
-            o = edge.end;
-            rdx = B.y - A.y;
-            rdy = A.x - B.x;
-        } else {
-            console.warn("Edge with no start or end", edge);
+
+        if (finalState) {
+            const A = edge.leftSite;
+            const B = edge.rightSite;
+            let ox: number;
+            let oy: number;
+            let rdx: number;
+            let rdy: number;
+
+            if (edge.start) {
+                ox = edge.start.x;
+                oy = edge.start.y;
+                rdx = A.y - B.y;
+                rdy = B.x - A.x;
+            } else if (edge.end) {
+                ox = edge.end.x;
+                oy = edge.end.y;
+                rdx = B.y - A.y;
+                rdy = A.x - B.x;
+            } else {
+                console.warn("Edge with no start or end", edge);
+                return;
+            }
+            const far = extendRayToBounds(new Point(ox, oy), new Point(rdx, rdy), bounds);
+            if (far) {
+                drawLine(ctx, new Point(ox, oy), far);
+            }
             return;
         }
-        const far = extendRayToBounds(o, new Point(rdx, rdy), bounds);
-        if (far) {
-            drawLine(ctx, o, far);
-        }
+
+        const x1 = edge.start
+            ? edge.start.x
+            : Geometry.parabolaIntersection(edge.leftSite, edge.rightSite, sweepY);
+        const y1 = edge.start
+            ? edge.start.y
+            : Geometry.parabolaY(edge.leftSite, sweepY, x1);
+
+        const x2 = edge.end
+            ? edge.end.x
+            : Geometry.parabolaIntersection(edge.rightSite, edge.leftSite, sweepY);
+        const y2 = edge.end
+            ? edge.end.y
+            : Geometry.parabolaY(edge.leftSite, sweepY, x2);
+
+        drawLine(ctx, new Point(x1, y1), new Point(x2, y2));
     });
     ctx.restore();
 }
@@ -267,6 +367,118 @@ function drawSites(ctx: CanvasRenderingContext2D): void {
         ctx.stroke();
     });
     ctx.restore();
+}
+
+function drawProcessedCenters(ctx: CanvasRenderingContext2D): void {
+    if (state.voronoi.centers.size === 0) return;
+    ctx.save();
+    ctx.fillStyle = "#c71585";
+    for (const center of state.voronoi.centers) {
+        const s = worldToScreen(center);
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+}
+
+function drawSweepLine(ctx: CanvasRenderingContext2D, y: number): void {
+    ctx.save();
+    ctx.strokeStyle = "#1f77b4";
+    ctx.lineWidth = 2;
+    const sy = worldToScreenY(y);
+    ctx.beginPath();
+    ctx.moveTo(0, sy);
+    ctx.lineTo(canvas.getBoundingClientRect().width, sy);
+    ctx.stroke();
+    ctx.restore();
+}
+
+function drawCircleEvents(ctx: CanvasRenderingContext2D): void {
+    if (!state.voronoi.beachRoot) return;
+    ctx.save();
+    ctx.strokeStyle = "#4a90e2";
+    ctx.lineWidth = 1;
+    let arc: Arc | undefined = state.voronoi.beachRoot;
+    while (arc) {
+        const ce = arc.circleEvent;
+        if (ce && ce.valid) {
+            drawCircle(ctx, ce.center, ce.radius);
+        }
+        arc = arc.next;
+    }
+    ctx.restore();
+}
+
+function drawCircle(ctx: CanvasRenderingContext2D, center: Point, radius: number): void {
+    const left = worldToScreenX(center.x - radius);
+    const top = worldToScreenY(center.y + radius);
+    const diameter = 2 * radius * state.scale;
+    ctx.beginPath();
+    ctx.ellipse(left + diameter / 2, top + diameter / 2, diameter / 2, diameter / 2, 0, 0, Math.PI * 2);
+    ctx.stroke();
+}
+
+function drawBeachLine(ctx: CanvasRenderingContext2D): void {
+    if (!state.voronoi.beachRoot) return;
+    const sweepY = state.voronoi.sweepY;
+    if (!Number.isFinite(sweepY)) return;
+
+    ctx.save();
+    ctx.strokeStyle = "#000";
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([6, 4]);
+
+    let arc: Arc | undefined = state.voronoi.beachRoot;
+    while (arc) {
+        drawBeachArc(ctx, arc, sweepY);
+        arc = arc.next;
+    }
+
+    ctx.restore();
+}
+
+function drawBeachArc(ctx: CanvasRenderingContext2D, arc: Arc, sweepY: number): void {
+    let leftX = screenToWorldX(0);
+    let rightX = screenToWorldX(canvas.getBoundingClientRect().width);
+    if (arc.prev) {
+        const t = Geometry.parabolaIntersection(arc.prev.site, arc.site, sweepY);
+        if (Number.isFinite(t)) leftX = t;
+    }
+    if (arc.next) {
+        const t = Geometry.parabolaIntersection(arc.site, arc.next.site, sweepY);
+        if (Number.isFinite(t)) rightX = t;
+    }
+    if (rightX <= leftX) return;
+
+    const samples = Math.min(Math.max(2, Math.floor(Math.abs(worldToScreenX(rightX) - worldToScreenX(leftX)))), 5000);
+    const dx = (rightX - leftX) / samples;
+    let started = false;
+    let prevSX = 0;
+    let prevSY = 0;
+
+    for (let i = 0; i <= samples; i++) {
+        const x = leftX + dx * i;
+        const y = Geometry.parabolaY(arc.site, sweepY, x);
+        if (!Number.isFinite(y) || y < sweepY) {
+            started = false;
+            continue;
+        }
+        const sx = worldToScreenX(x);
+        const sy = worldToScreenY(y);
+        if (!started) {
+            prevSX = sx;
+            prevSY = sy;
+            started = true;
+        } else {
+            ctx.beginPath();
+            ctx.moveTo(prevSX, prevSY);
+            ctx.lineTo(sx, sy);
+            ctx.stroke();
+            prevSX = sx;
+            prevSY = sy;
+        }
+    }
 }
 
 function handlePointerDown(event: PointerEvent): void {
@@ -326,7 +538,7 @@ function handlePointerMove(event: PointerEvent): void {
         const newX = state.dragSiteStartX + dx / state.scale;
         const newY = state.dragSiteStartY - dy / state.scale;
         state.sites[state.selectedIndex] = new Point(newX, newY);
-        recompute();
+        resetAlgorithm();
         return;
     }
 }
@@ -353,7 +565,7 @@ function handleWheel(event: WheelEvent): void {
     const worldX = screenToWorldX(mouseX);
     const worldY = screenToWorldY(mouseY);
     const delta = -event.deltaY;
-    const factor = Math.exp(delta * 0.0015);
+    const factor = Math.exp(delta * 0.001);
     state.scale *= factor;
     //state.scale = Math.min(Math.max(state.scale * factor, 0.2), 10);
     state.offsetX = mouseX - worldX * state.scale;
@@ -384,13 +596,11 @@ function handleAddPoint(): void {
 }
 
 function init(): void {
-    resizeCanvas();
+    resizeCanvas(false);
     resetView();
-    recompute();
+    resetAlgorithm();
     window.addEventListener("resize", () => {
-        resizeCanvas();
-        resetView();
-        draw();
+        window.requestAnimationFrame(() => resizeCanvas(true));
     });
     canvas.addEventListener("pointerdown", handlePointerDown);
     canvas.addEventListener("pointermove", handlePointerMove);
@@ -403,6 +613,10 @@ function init(): void {
             handleAddPoint();
         }
     });
+    resetBtn.addEventListener("click", resetAlgorithm);
+    stepBtn.addEventListener("click", stepAlgorithm);
+    runToEndBtn.addEventListener("click", runAlgorithmToEnd);
+    togglePanelBtn.addEventListener("click", togglePanel);
 }
 
 init();
