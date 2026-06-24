@@ -3,13 +3,17 @@ import { Edge } from "./Edge.js";
 import { Arc } from "./Arc.js";
 import { SiteEvent } from "./SiteEvent.js";
 import { CircleEvent } from "./CircleEvent.js";
-import { Event } from "./Event.js";
-import { Geometry } from "./Geometry.js";
+import type { Event } from "./Event.js";
+import { parabolaIntersection } from "./Geometry.js";
 
+function compareEvents(a: Event, b: Event): number {
+  if(a.y !== b.y) return b.y - a.y;
+  return a.x - b.x;
+}
 export class Voronoi {
   private static readonly EPS = 1e-9;
 
-  private readonly pq: Event[] = [];
+  readonly pq: Event[] = [];
 
   beachRoot: Arc | null = null;
   centers = new Set<Point>();
@@ -19,7 +23,7 @@ export class Voronoi {
 
   private addEvent(ev: Event): void {
     let i = 0;
-    while (i < this.pq.length && this.pq[i].compareTo(ev) <= 0) {
+    while (i < this.pq.length && compareEvents(this.pq[i], ev) <= 0) {
       i++;
     }
     this.pq.splice(i, 0, ev);
@@ -29,10 +33,6 @@ export class Voronoi {
     for (const s of sites) {
       this.addEvent(new SiteEvent(s));
     }
-  }
-
-  private pollEvent(): Event | undefined {
-    return this.pq.shift();
   }
 
   private checkCircle(sweepY: number, a?: Arc, b?: Arc, c?: Arc): void {
@@ -65,30 +65,24 @@ export class Voronoi {
     const center = new Point(ux, uy);
     const r = Math.hypot(center.x - A.x, center.y - A.y);
 
-    const eventY = center.y - r;
-    if (eventY >= (sweepY ?? this.sweepY) - Voronoi.EPS) return;
+    if (center.y - r >= sweepY - Voronoi.EPS) return;
 
     const ce = new CircleEvent(center, r, b);
     b.circleEvent = ce;
 
     this.addEvent(ce);
-    console.log("Circle event added", ce, "for arc", b);
   }
 
   private handleCircleEvent(ce: CircleEvent): void {
     const a = ce.arc;
     const vertex = ce.center;
 
-    if (!a.prev || !a.prev.rightEdge) {
-      console.warn("Circle event with undefined prev arc", ce);
-    } else {
+    if (a.prev?.rightEdge) {
       if (a.prev?.edgeOrientation) a.prev.rightEdge.end = vertex;
       else a.prev.rightEdge.start = vertex;
     }
 
-    if (!a.rightEdge) {
-      console.warn("Circle event with undefined right edge", ce);
-    } else {
+    if (a.rightEdge) {
       if (a.edgeOrientation) a.rightEdge.end = vertex;
       else a.rightEdge.start = vertex;
     }
@@ -125,8 +119,7 @@ export class Voronoi {
       return false;
     }
 
-    const ev = this.pollEvent();
-    console.log("Event polled", ev);
+    const ev = this.pq.shift();
 
     if (!ev) return false;
 
@@ -134,15 +127,9 @@ export class Voronoi {
 
     if (ev instanceof SiteEvent) {
       this.handleSiteEvent(ev);
-      console.log("Site handled", ev, "beachline", this.beachlineToString(this.beachRoot));
     } else if (ev instanceof CircleEvent) {
-      const ce = ev as CircleEvent;
-      const arc = ce.arc;
-
-      this.centers.add(ce.center);
-      this.handleCircleEvent(ce);
-
-      console.log("Circle handled", ce, arc);
+      this.centers.add(ev.center);
+      this.handleCircleEvent(ev);
     }
     while (
       this.pq.length > 0 &&
@@ -150,7 +137,7 @@ export class Voronoi {
       (!(this.pq[0] as CircleEvent).valid ||
         (this.pq[0] as CircleEvent).arc.circleEvent !== this.pq[0])
     ) {
-      this.pollEvent();
+      this.pq.shift();
     }
     return true;
   }
@@ -159,11 +146,11 @@ export class Voronoi {
     while (this.step()) {}
   }
 
-  static findArcAbove(head: Arc, p: Point): Arc {
+  private findArcAbove(head: Arc, p: Point): Arc {
     let a: Arc = head;
 
     while (a.next) {
-      if (p.x < Geometry.parabolaIntersection(a.site, a.next.site, p.y)) {
+      if (p.x < parabolaIntersection(a.site, a.next.site, p.y)) {
         return a;
       }
       a = a.next;
@@ -179,7 +166,7 @@ export class Voronoi {
       return;
     }
 
-    const arc = Voronoi.findArcAbove(this.beachRoot, p);
+    const arc = this.findArcAbove(this.beachRoot, p);
 
     if (arc.circleEvent) {
       arc.circleEvent.valid = false;
@@ -218,25 +205,5 @@ export class Voronoi {
 
     this.checkCircle(p.y, left.prev, left, center);
     this.checkCircle(p.y, center, right, right.next);
-  }
-
-  private beachlineToString(head: Arc | null): string {
-    if (!head) return "[]";
-
-    let sb = "[";
-    let a: Arc | null = head;
-    let first = true;
-
-    while (a) {
-      if (!first) sb += " -> ";
-
-      sb += `(${a.site.x.toFixed(3)}, ${a.site.y.toFixed(3)})`;
-
-      first = false;
-      a = a.next ?? null;
-    }
-
-    sb += "]";
-    return sb;
   }
 }

@@ -1,9 +1,12 @@
 import { Point } from "./Point.js";
-import { Event } from "./Event.js";
 
-export class SiteEvent extends Event {
+export class SiteEvent {
+    readonly x: number;
+    readonly y: number;
+
     constructor(public readonly site: Point) {
-        super(site.x, site.y);
+        this.x = site.x;
+        this.y = site.y;
     }
 
     toString(): string {

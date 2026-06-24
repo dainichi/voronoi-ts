@@ -1,8 +1,9 @@
 import { Point } from "./Point.js";
 import { Edge } from "./Edge.js";
 import { Voronoi } from "./Voronoi.js";
-import { Geometry } from "./Geometry.js";
+import { parabolaIntersection, parabolaY } from "./Geometry.js";
 import type { Arc } from "./Arc.js";
+import { CircleEvent } from "./CircleEvent.js";
 
 type DragMode = "none" | "move" | "pan";
 
@@ -18,8 +19,6 @@ const togglePanelBtn = document.getElementById("toggle-panel-btn") as HTMLButton
 const panel = document.getElementById("panel")!;
 
 const app = document.getElementById("app")!;
-let lastCanvasWidth = 0;
-let lastCanvasHeight = 0;
 
 const state = {
     sites: [
@@ -40,39 +39,11 @@ const state = {
     voronoi: new Voronoi([]),
     vertices: [] as Point[],
     algorithmComplete: false,
+    lastCircle: null as { center: Point; radius: number  } | null,
     pendingClick: false,
     clickStartX: 0,
     clickStartY: 0
 };
-
-function resizeCanvas(preserveCenter = true): void {
-    const rect = canvas.getBoundingClientRect();
-    const newWidth = rect.width;
-    const newHeight = rect.height;
-
-    let centerWorldX: number | null = null;
-    let centerWorldY: number | null = null;
-    if (preserveCenter && lastCanvasWidth > 0 && lastCanvasHeight > 0) {
-        centerWorldX = screenToWorldX(lastCanvasWidth / 2);
-        centerWorldY = screenToWorldY(lastCanvasHeight / 2);
-    }
-
-    canvas.width = newWidth * window.devicePixelRatio;
-    canvas.height = newHeight * window.devicePixelRatio;
-    canvas.style.width = `${newWidth}px`;
-    canvas.style.height = `${newHeight}px`;
-    const ctx = canvas.getContext("2d");
-    if (ctx) ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
-
-    if (centerWorldX !== null && centerWorldY !== null) {
-        state.offsetX = newWidth / 2 - centerWorldX * state.scale;
-        state.offsetY = newHeight / 2 + centerWorldY * state.scale;
-    }
-
-    lastCanvasWidth = newWidth;
-    lastCanvasHeight = newHeight;
-    draw();
-}
 
 function worldToScreen(p: Point): Point {
     return new Point(worldToScreenX(p.x), worldToScreenY(p.y));
@@ -124,6 +95,7 @@ function removeSite(index: number): void {
 function resetAlgorithm(): void {
     state.voronoi = new Voronoi(state.sites.map((s) => new Point(s.x, s.y)));
     state.algorithmComplete = false;
+    state.lastCircle = null;
     state.vertices = extractVertices();
     updatePointList();
     updateVertexList();
@@ -151,6 +123,8 @@ function updateToolbarButtons(): void {
 
 function stepAlgorithm(): void {
     if (state.algorithmComplete) return;
+    const next = state.voronoi.pq[0];
+    state.lastCircle = next instanceof CircleEvent ? { center: next.center, radius: next.radius } : null;
     if (!state.voronoi.step()) {
         state.algorithmComplete = true;
     }
@@ -162,6 +136,7 @@ function stepAlgorithm(): void {
 
 function runAlgorithmToEnd(): void {
     if (state.algorithmComplete) return;
+    state.lastCircle = null;
     while (state.voronoi.step()) {}
     state.algorithmComplete = true;
     state.vertices = extractVertices();
@@ -174,7 +149,6 @@ function togglePanel(): void {
     const hidden = panel.classList.toggle("hidden");
     app.classList.toggle("panel-hidden", hidden);
     togglePanelBtn.textContent = hidden ? "Show panel" : "Hide panel";
-    window.requestAnimationFrame(() => resizeCanvas(true));
 }
 
 function updatePointList(): void {
@@ -241,6 +215,7 @@ function resetView(): void {
 }
 
 function draw(): void {
+    const lastCircle = state.lastCircle;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const rect = canvas.getBoundingClientRect();
@@ -256,6 +231,9 @@ function draw(): void {
         drawSweepLine(ctx, sweepY);
         drawCircleEvents(ctx);
         drawBeachLine(ctx);
+    }
+    if (lastCircle) {
+        drawLastCircle(ctx, lastCircle.center, lastCircle.radius);
     }
     drawProcessedCenters(ctx);
     drawSites(ctx);
@@ -311,17 +289,17 @@ function drawEdges(ctx: CanvasRenderingContext2D): void {
 
         const x1 = edge.start
             ? edge.start.x
-            : Geometry.parabolaIntersection(edge.leftSite, edge.rightSite, sweepY);
+            : parabolaIntersection(edge.leftSite, edge.rightSite, sweepY);
         const y1 = edge.start
             ? edge.start.y
-            : Geometry.parabolaY(edge.leftSite, sweepY, x1);
+            : parabolaY(edge.leftSite, sweepY, x1);
 
         const x2 = edge.end
             ? edge.end.x
-            : Geometry.parabolaIntersection(edge.rightSite, edge.leftSite, sweepY);
+            : parabolaIntersection(edge.rightSite, edge.leftSite, sweepY);
         const y2 = edge.end
             ? edge.end.y
-            : Geometry.parabolaY(edge.leftSite, sweepY, x2);
+            : parabolaY(edge.leftSite, sweepY, x2);
 
         drawLine(ctx, new Point(x1, y1), new Point(x2, y2));
     });
@@ -394,6 +372,15 @@ function drawSweepLine(ctx: CanvasRenderingContext2D, y: number): void {
     ctx.restore();
 }
 
+function drawLastCircle(ctx: CanvasRenderingContext2D, center: Point, radius: number): void {
+    ctx.save();
+    ctx.strokeStyle = "#4a90e2";
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 4]);
+    drawCircle(ctx, center, radius);
+    ctx.restore();
+}
+
 function drawCircleEvents(ctx: CanvasRenderingContext2D): void {
     if (!state.voronoi.beachRoot) return;
     ctx.save();
@@ -438,15 +425,38 @@ function drawBeachLine(ctx: CanvasRenderingContext2D): void {
     ctx.restore();
 }
 
+function drawDegenerateArc(ctx: CanvasRenderingContext2D, arc: Arc, sweepY: number): void {
+    const siteX = arc.site.x;
+
+    const above = (arc.prev && arc.prev.site.y !== sweepY) ? arc.prev
+                : (arc.next && arc.next.site.y !== sweepY) ? arc.next
+                : null;
+
+    const topWorldY = above ? parabolaY(above.site, sweepY, siteX) : screenToWorldY(0);
+
+    ctx.save();
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(worldToScreenX(siteX), worldToScreenY(sweepY));
+    ctx.lineTo(worldToScreenX(siteX), worldToScreenY(topWorldY));
+    ctx.stroke();
+    ctx.restore();
+}
+
 function drawBeachArc(ctx: CanvasRenderingContext2D, arc: Arc, sweepY: number): void {
+    if (arc.site.y === sweepY) {
+        drawDegenerateArc(ctx, arc, sweepY);
+        return;
+    }
+
     let leftX = screenToWorldX(0);
     let rightX = screenToWorldX(canvas.getBoundingClientRect().width);
     if (arc.prev) {
-        const t = Geometry.parabolaIntersection(arc.prev.site, arc.site, sweepY);
+        const t = parabolaIntersection(arc.prev.site, arc.site, sweepY);
         if (Number.isFinite(t)) leftX = t;
     }
     if (arc.next) {
-        const t = Geometry.parabolaIntersection(arc.site, arc.next.site, sweepY);
+        const t = parabolaIntersection(arc.site, arc.next.site, sweepY);
         if (Number.isFinite(t)) rightX = t;
     }
     if (rightX <= leftX) return;
@@ -454,12 +464,11 @@ function drawBeachArc(ctx: CanvasRenderingContext2D, arc: Arc, sweepY: number): 
     const samples = Math.min(Math.max(2, Math.floor(Math.abs(worldToScreenX(rightX) - worldToScreenX(leftX)))), 5000);
     const dx = (rightX - leftX) / samples;
     let started = false;
-    let prevSX = 0;
-    let prevSY = 0;
 
+    ctx.beginPath();
     for (let i = 0; i <= samples; i++) {
         const x = leftX + dx * i;
-        const y = Geometry.parabolaY(arc.site, sweepY, x);
+        const y = parabolaY(arc.site, sweepY, x);
         if (!Number.isFinite(y) || y < sweepY) {
             started = false;
             continue;
@@ -467,18 +476,12 @@ function drawBeachArc(ctx: CanvasRenderingContext2D, arc: Arc, sweepY: number): 
         const sx = worldToScreenX(x);
         const sy = worldToScreenY(y);
         if (!started) {
-            prevSX = sx;
-            prevSY = sy;
             started = true;
         } else {
-            ctx.beginPath();
-            ctx.moveTo(prevSX, prevSY);
             ctx.lineTo(sx, sy);
-            ctx.stroke();
-            prevSX = sx;
-            prevSY = sy;
         }
     }
+    ctx.stroke();
 }
 
 function handlePointerDown(event: PointerEvent): void {
@@ -596,12 +599,31 @@ function handleAddPoint(): void {
 }
 
 function init(): void {
-    resizeCanvas(false);
+    const ctx = canvas.getContext("2d")!;
+    let lastWidth = 0;
+    let lastHeight = 0;
+    const {width, height} = canvas.getBoundingClientRect();
+    canvas.width = width * window.devicePixelRatio;
+    canvas.height = height * window.devicePixelRatio;
+    ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
+    lastWidth = width;
+    lastHeight = height;
     resetView();
     resetAlgorithm();
-    window.addEventListener("resize", () => {
-        window.requestAnimationFrame(() => resizeCanvas(true));
-    });
+    new ResizeObserver((entries) => {
+        const { width:w, height:h} = entries[0].contentRect;
+        const centerWorldX = screenToWorldX(lastWidth / 2);
+        const centerWorldY = screenToWorldY(lastHeight / 2);
+        canvas.width = w * window.devicePixelRatio;
+        canvas.height = h * window.devicePixelRatio;
+        ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
+        state.offsetX = w / 2 - centerWorldX * state.scale;
+        state.offsetY = h / 2 + centerWorldY * state.scale;
+        lastWidth = w;
+        lastHeight = h;
+        draw();
+    }).observe(canvas);
+
     canvas.addEventListener("pointerdown", handlePointerDown);
     canvas.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
