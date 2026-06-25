@@ -92,7 +92,23 @@ function removeSite(index: number): void {
     resetAlgorithm();
 }
 
+const SITES_KEY = "voronoi-ts-sites";
+
+function saveSites(): void {
+    localStorage.setItem(SITES_KEY, JSON.stringify(state.sites.map((s) => ({ x: s.x, y: s.y }))));
+}
+
+function loadSites(): void {
+    try {
+        const stored = localStorage.getItem(SITES_KEY);
+        if (!stored) return;
+        const data = JSON.parse(stored) as { x: number; y: number }[];
+        if (Array.isArray(data)) state.sites = data.map((d: any) => new Point(d.x, d.y));
+    } catch {}// Ignore JSON parse errors
+}
+
 function resetAlgorithm(): void {
+    saveSites();
     state.voronoi = new Voronoi(state.sites.map((s) => new Point(s.x, s.y)));
     state.algorithmComplete = false;
     state.lastCircle = null;
@@ -258,31 +274,31 @@ function drawEdges(ctx: CanvasRenderingContext2D): void {
             return;
         }
 
+        if (edge.leftSite.y === edge.rightSite.y) {
+            const x = (edge.leftSite.x + edge.rightSite.x) / 2;
+            const topY = edge.start?.y ?? bounds.maxY;
+            const botY = edge.end?.y ?? (finalState ? bounds.minY : parabolaY(edge.leftSite, sweepY, x));
+            drawLine(ctx, new Point(x, topY), new Point(x, botY));
+            return;
+        }
+
         if (finalState) {
             const A = edge.leftSite;
             const B = edge.rightSite;
             let ox: number;
-            let oy: number;
-            let rdx: number;
-            let rdy: number;
 
             if (edge.start) {
-                ox = edge.start.x;
-                oy = edge.start.y;
-                rdx = A.y - B.y;
-                rdy = B.x - A.x;
+                const far = extendRayToBounds(edge.start, new Point(A.y - B.y, B.x - A.x), bounds);
+                if (far) drawLine(ctx, edge.start, far);
             } else if (edge.end) {
-                ox = edge.end.x;
-                oy = edge.end.y;
-                rdx = B.y - A.y;
-                rdy = A.x - B.x;
+                const far = extendRayToBounds(edge.end, new Point(B.y - A.y, A.x - B.x), bounds);
+                if (far) drawLine(ctx, edge.end, far);
             } else {
-                console.warn("Edge with no start or end", edge);
-                return;
-            }
-            const far = extendRayToBounds(new Point(ox, oy), new Point(rdx, rdy), bounds);
-            if (far) {
-                drawLine(ctx, new Point(ox, oy), far);
+                const mid = new Point((A.x + B.x) / 2, (A.y + B.y) / 2);
+                const dir = new Point(A.y - B.y, B.x - A.x);
+                const far1 = extendRayToBounds(mid, dir, bounds);
+                const far2 = extendRayToBounds(mid, new Point(-dir.x, -dir.y), bounds);
+                if (far1 && far2) drawLine(ctx, far1, far2);
             }
             return;
         }
@@ -476,6 +492,7 @@ function drawBeachArc(ctx: CanvasRenderingContext2D, arc: Arc, sweepY: number): 
         const sx = worldToScreenX(x);
         const sy = worldToScreenY(y);
         if (!started) {
+            ctx.moveTo(sx, sy);
             started = true;
         } else {
             ctx.lineTo(sx, sy);
@@ -608,6 +625,7 @@ function init(): void {
     ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
     lastWidth = width;
     lastHeight = height;
+    loadSites();
     resetView();
     resetAlgorithm();
     new ResizeObserver((entries) => {

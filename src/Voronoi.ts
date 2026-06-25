@@ -65,7 +65,7 @@ export class Voronoi {
     const center = new Point(ux, uy);
     const r = Math.hypot(center.x - A.x, center.y - A.y);
 
-    if (center.y - r >= sweepY - Voronoi.EPS) return;
+    if (center.y - r > sweepY + Voronoi.EPS) return;
 
     const ce = new CircleEvent(center, r, b);
     b.circleEvent = ce;
@@ -172,6 +172,28 @@ export class Voronoi {
       arc.circleEvent.valid = false;
       arc.circleEvent = undefined;
     }
+
+    if (arc.site.y === p.y) {
+      const newArc = new Arc(p);
+      newArc.prev = arc;
+      newArc.next = arc.next;
+      if (arc.next) arc.next.prev = newArc;
+      arc.next = newArc;
+
+      const e = new Edge(p, arc.site);
+      this.edges.add(e);
+
+      newArc.rightEdge = arc.rightEdge;
+      newArc.edgeOrientation = arc.edgeOrientation;
+      
+      arc.rightEdge = e;
+      arc.edgeOrientation = true;
+
+      this.checkCircle(p.y, arc.prev, arc, newArc);
+      this.checkCircle(p.y, arc, newArc, newArc.next);
+      return;
+    }
+
 
     const left = new Arc(arc.site);
     const center = new Arc(p);
