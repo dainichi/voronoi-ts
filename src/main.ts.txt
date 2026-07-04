@@ -1,7 +1,7 @@
 import { Point } from "./Point.js";
-import { Edge } from "./Edge.js";
+import { VoronoiEdge } from "./VoronoiEdge.js";
 import { Voronoi } from "./Voronoi.js";
-import { parabolaIntersection, parabolaY } from "./Geometry.js";
+import { arcIntersection, parabolaY } from "./Geometry.js";
 import type { Arc } from "./Arc.js";
 import { CircleEvent } from "./CircleEvent.js";
 
@@ -305,14 +305,14 @@ function drawEdges(ctx: CanvasRenderingContext2D): void {
 
         const x1 = edge.start
             ? edge.start.x
-            : parabolaIntersection(edge.leftSite, edge.rightSite, sweepY);
+            : arcIntersection(edge.leftSite, edge.rightSite, sweepY);
         const y1 = edge.start
             ? edge.start.y
             : parabolaY(edge.leftSite, sweepY, x1);
 
         const x2 = edge.end
             ? edge.end.x
-            : parabolaIntersection(edge.rightSite, edge.leftSite, sweepY);
+            : arcIntersection(edge.rightSite, edge.leftSite, sweepY);
         const y2 = edge.end
             ? edge.end.y
             : parabolaY(edge.leftSite, sweepY, x2);
@@ -398,11 +398,11 @@ function drawLastCircle(ctx: CanvasRenderingContext2D, center: Point, radius: nu
 }
 
 function drawCircleEvents(ctx: CanvasRenderingContext2D): void {
-    if (!state.voronoi.beachRoot) return;
+    if (!state.voronoi.beachHead) return;
     ctx.save();
     ctx.strokeStyle = "#4a90e2";
     ctx.lineWidth = 1;
-    let arc: Arc | undefined = state.voronoi.beachRoot;
+    let arc: Arc | undefined = state.voronoi.beachHead;
     while (arc) {
         const ce = arc.circleEvent;
         if (ce && ce.valid) {
@@ -423,7 +423,7 @@ function drawCircle(ctx: CanvasRenderingContext2D, center: Point, radius: number
 }
 
 function drawBeachLine(ctx: CanvasRenderingContext2D): void {
-    if (!state.voronoi.beachRoot) return;
+    if (!state.voronoi.beachHead) return;
     const sweepY = state.voronoi.sweepY;
     if (!Number.isFinite(sweepY)) return;
 
@@ -432,7 +432,7 @@ function drawBeachLine(ctx: CanvasRenderingContext2D): void {
     ctx.lineWidth = 1.2;
     ctx.setLineDash([6, 4]);
 
-    let arc: Arc | undefined = state.voronoi.beachRoot;
+    let arc: Arc | undefined = state.voronoi.beachHead;
     while (arc) {
         drawBeachArc(ctx, arc, sweepY);
         arc = arc.next;
@@ -468,11 +468,11 @@ function drawBeachArc(ctx: CanvasRenderingContext2D, arc: Arc, sweepY: number): 
     let leftX = screenToWorldX(0);
     let rightX = screenToWorldX(canvas.getBoundingClientRect().width);
     if (arc.prev) {
-        const t = parabolaIntersection(arc.prev.site, arc.site, sweepY);
+        const t = arcIntersection(arc.prev.site, arc.site, sweepY);
         if (Number.isFinite(t)) leftX = t;
     }
     if (arc.next) {
-        const t = parabolaIntersection(arc.site, arc.next.site, sweepY);
+        const t = arcIntersection(arc.site, arc.next.site, sweepY);
         if (Number.isFinite(t)) rightX = t;
     }
     if (rightX <= leftX) return;

@@ -1,18 +1,16 @@
-import { Edge } from "./Edge.js";
-import { Point } from "./Point.js";
+import { VoronoiEdge } from "./VoronoiEdge.js";
 import { CircleEvent } from "./CircleEvent.js";
+import { PolygonEdge } from "./PolygonEdge.js";
 
 export class Arc {
     prev?: Arc;
     next?: Arc;
     circleEvent?: CircleEvent;
-    rightEdge?: Edge;
+    rightEdge?: VoronoiEdge;
 
-    edgeOrientation = false;
-
-    constructor(public readonly site: Point) {}
+    constructor(public readonly edge: PolygonEdge) {}
 
     toString(): string {
-        return `Arc(${this.site})`;
+        return `Arc(${this.edge})`;
     }
 }
