@@ -10,8 +10,10 @@ export function arcIntersection(
 }
 
 export function solve3x3(
-    m: number[][] // 3x4 augmented matrix
+    matrix: readonly (readonly number[])[] // 3x4 augmented matrix
 ): [number, number, number] {
+
+    const m = matrix.map(row => [...row]);
 
     for (let col = 0; col < 3; col++) {
 

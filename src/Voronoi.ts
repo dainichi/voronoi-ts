@@ -66,6 +66,14 @@ export class Voronoi {
     const a = ce.arc;
     const vertex = ce.center;
 
+    if(a.prev?.rightEdge) {
+      a.prev.rightEdge.end = vertex;
+    }
+    if (a.rightEdge) {
+      a.rightEdge.end = vertex;
+    }
+
+
     const left = a.prev!;
     const right = a.next!;
 
@@ -140,9 +148,13 @@ export class Voronoi {
     }
 
     if (v.prevEdge === this.beach.head.edge && v.nextEdge === this.beach.tail.edge) {
-      console.log("Vertex event at the end of the beachline, ignoring");
+      console.log("Vertex event at both ends of the beachline");
+      if (this.beach.head.rightEdge) {
+        this.beach.head.rightEdge.end = v.p;
+      }
       return;
     } else if (v.prevEdge === this.beach.head.edge) {
+      console.log("Vertex event at the head of the beachline");
       let a = new Arc(v.nextEdge!);
       a.next = this.beach.head;
       this.beach.head.prev = a;
@@ -153,6 +165,7 @@ export class Voronoi {
       this.checkCircle(a, a.next, a.next.next);
       return;
     } else if (v.nextEdge === this.beach.tail.edge) {
+      console.log("Vertex event at the tail of the beachline");
       let a = new Arc(v.prevEdge!);
       a.prev = this.beach.tail;
       this.beach.tail.next = a;

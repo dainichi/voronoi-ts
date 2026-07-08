@@ -1,7 +1,7 @@
 import { Point } from "./Point.js";
 import { VoronoiEdge } from "./VoronoiEdge.js";
 import { Voronoi } from "./Voronoi.js";
-import { arcIntersection, parabolaY } from "./Geometry.js";
+import { arcIntersection } from "./Geometry.js";
 import type { Arc } from "./Arc.js";
 import { CircleEvent } from "./CircleEvent.js";
 
@@ -21,12 +21,7 @@ const panel = document.getElementById("panel")!;
 const app = document.getElementById("app")!;
 
 const state = {
-    sites: [
-        new Point(250, 100),
-        new Point(200, 200),
-        new Point(400, 280),
-        new Point(100, 300)
-    ] as Point[],
+    sites: [new Point(2, 4), new Point(0, 0), new Point(4, 0) ] as Point[],
     selectedIndex: -1,
     dragMode: "none" as DragMode,
     dragStartX: 0,
@@ -214,8 +209,8 @@ function getBounds(): { minX: number; minY: number; maxX: number; maxY: number }
         maxX = Math.max(maxX, site.x);
         maxY = Math.max(maxY, site.y);
     });
-    const padX = Math.max(50, (maxX - minX) * 0.2);
-    const padY = Math.max(50, (maxY - minY) * 0.2);
+    const padX = Math.max(1, (maxX - minX) * 0.7);
+    const padY = Math.max(1, (maxY - minY) * 0.7);
     return { minX: minX - padX, minY: minY - padY, maxX: maxX + padX, maxY: maxY + padY };
 }
 
@@ -252,7 +247,7 @@ function draw(): void {
         drawLastCircle(ctx, lastCircle.center, lastCircle.radius);
     }
     drawProcessedCenters(ctx);
-    drawSites(ctx);
+    drawPolygon(ctx);
 }
 
 function drawEdges(ctx: CanvasRenderingContext2D): void {
@@ -274,15 +269,15 @@ function drawEdges(ctx: CanvasRenderingContext2D): void {
             return;
         }
 
-        if (edge.leftSite.y === edge.rightSite.y) {
+/*         if (edge.leftSite.y === edge.rightSite.y) {
             const x = (edge.leftSite.x + edge.rightSite.x) / 2;
             const topY = edge.start?.y ?? bounds.maxY;
             const botY = edge.end?.y ?? (finalState ? bounds.minY : parabolaY(edge.leftSite, sweepY, x));
             drawLine(ctx, new Point(x, topY), new Point(x, botY));
             return;
         }
-
-        if (finalState) {
+ */
+/*         if (finalState) {
             const A = edge.leftSite;
             const B = edge.rightSite;
             let ox: number;
@@ -302,20 +297,13 @@ function drawEdges(ctx: CanvasRenderingContext2D): void {
             }
             return;
         }
+ */
+        const x1 = edge.start?.x!
+        const y1 = edge.start?.y!
 
-        const x1 = edge.start
-            ? edge.start.x
-            : arcIntersection(edge.leftSite, edge.rightSite, sweepY);
-        const y1 = edge.start
-            ? edge.start.y
-            : parabolaY(edge.leftSite, sweepY, x1);
-
-        const x2 = edge.end
-            ? edge.end.x
-            : arcIntersection(edge.rightSite, edge.leftSite, sweepY);
-        const y2 = edge.end
-            ? edge.end.y
-            : parabolaY(edge.leftSite, sweepY, x2);
+        const [x2, y2] = edge.end
+            ? [edge.end.x, edge.end.y]
+            : arcIntersection(edge.rightSite, edge.leftSite, sweepY).slice(0, 2 );
 
         drawLine(ctx, new Point(x1, y1), new Point(x2, y2));
     });
@@ -348,18 +336,41 @@ function extendRayToBounds(p: Point, d: Point, bounds: { minX: number; minY: num
     return new Point(p.x + t * d.x, p.y + t * d.y);
 }
 
-function drawSites(ctx: CanvasRenderingContext2D): void {
+function drawPolygon(ctx: CanvasRenderingContext2D): void {
     ctx.save();
+
+    // Draw edges.
+    if (state.sites.length > 1) {
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+
+        const first = worldToScreen(state.sites[0]);
+        ctx.moveTo(first.x, first.y);
+
+        for (let i = 1; i < state.sites.length; i++) {
+            const p = worldToScreen(state.sites[i]);
+            ctx.lineTo(p.x, p.y);
+        }
+
+        // Close the polygon.
+        ctx.lineTo(first.x, first.y);
+        ctx.stroke();
+    }
+
+    // Draw vertices.
     state.sites.forEach((site, index) => {
         const s = worldToScreen(site);
         ctx.fillStyle = index === state.selectedIndex ? "#0047ab" : "#d92b2b";
         ctx.beginPath();
         ctx.arc(s.x, s.y, 6, 0, Math.PI * 2);
         ctx.fill();
+
         ctx.strokeStyle = "#fff";
         ctx.lineWidth = 2;
         ctx.stroke();
     });
+
     ctx.restore();
 }
 
@@ -398,11 +409,11 @@ function drawLastCircle(ctx: CanvasRenderingContext2D, center: Point, radius: nu
 }
 
 function drawCircleEvents(ctx: CanvasRenderingContext2D): void {
-    if (!state.voronoi.beachHead) return;
+    if (!state.voronoi.beach) return;
     ctx.save();
     ctx.strokeStyle = "#4a90e2";
     ctx.lineWidth = 1;
-    let arc: Arc | undefined = state.voronoi.beachHead;
+    let arc: Arc | undefined = state.voronoi.beach.head;
     while (arc) {
         const ce = arc.circleEvent;
         if (ce && ce.valid) {
@@ -423,7 +434,7 @@ function drawCircle(ctx: CanvasRenderingContext2D, center: Point, radius: number
 }
 
 function drawBeachLine(ctx: CanvasRenderingContext2D): void {
-    if (!state.voronoi.beachHead) return;
+    if (!state.voronoi.beach) return;
     const sweepY = state.voronoi.sweepY;
     if (!Number.isFinite(sweepY)) return;
 
@@ -432,7 +443,7 @@ function drawBeachLine(ctx: CanvasRenderingContext2D): void {
     ctx.lineWidth = 1.2;
     ctx.setLineDash([6, 4]);
 
-    let arc: Arc | undefined = state.voronoi.beachHead;
+    let arc: Arc | undefined = state.voronoi.beach.head;
     while (arc) {
         drawBeachArc(ctx, arc, sweepY);
         arc = arc.next;
@@ -441,7 +452,7 @@ function drawBeachLine(ctx: CanvasRenderingContext2D): void {
     ctx.restore();
 }
 
-function drawDegenerateArc(ctx: CanvasRenderingContext2D, arc: Arc, sweepY: number): void {
+/* function drawDegenerateArc(ctx: CanvasRenderingContext2D, arc: Arc, sweepY: number): void {
     const siteX = arc.site.x;
 
     const above = (arc.prev && arc.prev.site.y !== sweepY) ? arc.prev
@@ -458,46 +469,24 @@ function drawDegenerateArc(ctx: CanvasRenderingContext2D, arc: Arc, sweepY: numb
     ctx.stroke();
     ctx.restore();
 }
-
+ */
 function drawBeachArc(ctx: CanvasRenderingContext2D, arc: Arc, sweepY: number): void {
-    if (arc.site.y === sweepY) {
+/*     if (arc.site.y === sweepY) {
         drawDegenerateArc(ctx, arc, sweepY);
         return;
-    }
+    } */
 
-    let leftX = screenToWorldX(0);
-    let rightX = screenToWorldX(canvas.getBoundingClientRect().width);
-    if (arc.prev) {
-        const t = arcIntersection(arc.prev.site, arc.site, sweepY);
-        if (Number.isFinite(t)) leftX = t;
-    }
-    if (arc.next) {
-        const t = arcIntersection(arc.site, arc.next.site, sweepY);
-        if (Number.isFinite(t)) rightX = t;
-    }
-    if (rightX <= leftX) return;
+    const [x1,y1] = arc.prev ? 
+        arcIntersection(arc.prev.edge, arc.edge, sweepY).slice(0, 2) : 
+        [arc.edge.start.p.x + (arc.edge.end.p.x - arc.edge.start.p.x) * (sweepY - arc.edge.start.p.y) / (arc.edge.end.p.y - arc.edge.start.p.y), sweepY];
 
-    const samples = Math.min(Math.max(2, Math.floor(Math.abs(worldToScreenX(rightX) - worldToScreenX(leftX)))), 5000);
-    const dx = (rightX - leftX) / samples;
-    let started = false;
+    const [x2,y2] = arc.next ?
+        arcIntersection(arc.edge, arc.next.edge, sweepY).slice(0, 2) :
+        [arc.edge.start.p.x + (arc.edge.end.p.x - arc.edge.start.p.x) * (sweepY - arc.edge.start.p.y) / (arc.edge.end.p.y - arc.edge.start.p.y), sweepY];
 
     ctx.beginPath();
-    for (let i = 0; i <= samples; i++) {
-        const x = leftX + dx * i;
-        const y = parabolaY(arc.site, sweepY, x);
-        if (!Number.isFinite(y) || y < sweepY) {
-            started = false;
-            continue;
-        }
-        const sx = worldToScreenX(x);
-        const sy = worldToScreenY(y);
-        if (!started) {
-            ctx.moveTo(sx, sy);
-            started = true;
-        } else {
-            ctx.lineTo(sx, sy);
-        }
-    }
+    ctx.moveTo(worldToScreenX(x1), worldToScreenY(y1));
+    ctx.lineTo(worldToScreenX(x2), worldToScreenY(y2));
     ctx.stroke();
 }
 
