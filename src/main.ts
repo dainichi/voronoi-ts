@@ -14,11 +14,14 @@ const coordinateInput = document.getElementById("coordinate-input") as HTMLInput
 const addPointBtn = document.getElementById("add-point-btn") as HTMLButtonElement;
 const resetBtn = document.getElementById("reset-btn") as HTMLButtonElement;
 const stepBtn = document.getElementById("step-btn") as HTMLButtonElement;
+const singlePixelStepBtn = document.getElementById("single-pixel-step-btn") as HTMLButtonElement;
 const runToEndBtn = document.getElementById("run-to-end-btn") as HTMLButtonElement;
 const togglePanelBtn = document.getElementById("toggle-panel-btn") as HTMLButtonElement;
 const panel = document.getElementById("panel")!;
 
 const app = document.getElementById("app")!;
+
+const SINGLE_PIXEL_STEP_INTERVAL_MS = 150;
 
 const state = {
     sites: [
@@ -42,7 +45,9 @@ const state = {
     lastCircle: null as { center: Point; radius: number  } | null,
     pendingClick: false,
     clickStartX: 0,
-    clickStartY: 0
+    clickStartY: 0,
+    singlePixelStepTimer: 0,
+    suppressNextSinglePixelClick: false
 };
 
 function worldToScreen(p: Point): Point {
@@ -134,7 +139,19 @@ function extractVertices(): Point[] {
 
 function updateToolbarButtons(): void {
     stepBtn.disabled = state.algorithmComplete || state.sites.length === 0;
+    singlePixelStepBtn.disabled = state.algorithmComplete || state.sites.length === 0;
     runToEndBtn.disabled = state.algorithmComplete || state.sites.length === 0;
+}
+
+function discardInvalidCircleEvents(): void {
+    while (
+        state.voronoi.pq.length > 0 &&
+        state.voronoi.pq[0] instanceof CircleEvent &&
+        (!(state.voronoi.pq[0] as CircleEvent).valid ||
+            (state.voronoi.pq[0] as CircleEvent).arc.circleEvent !== state.voronoi.pq[0])
+    ) {
+        state.voronoi.pq.shift();
+    }
 }
 
 function stepAlgorithm(): void {
@@ -148,6 +165,58 @@ function stepAlgorithm(): void {
     updateVertexList();
     updateToolbarButtons();
     draw();
+}
+
+function singlePixelStepAlgorithm(): void {
+    if (state.algorithmComplete) return;
+    discardInvalidCircleEvents();
+
+    const next = state.voronoi.pq[0];
+    const sweepY = state.voronoi.sweepY;
+    if (!next || !Number.isFinite(sweepY)) {
+        stepAlgorithm();
+        return;
+    }
+
+    const nextSweepY = sweepY - 1 / state.scale;
+    if (nextSweepY <= next.y) {
+        stepAlgorithm();
+        return;
+    }
+
+    state.voronoi.sweepY = nextSweepY;
+    draw();
+}
+
+function startSinglePixelStepHold(event: PointerEvent): void {
+    if (event.button !== 0 || singlePixelStepBtn.disabled) return;
+
+    state.suppressNextSinglePixelClick = true;
+    singlePixelStepBtn.setPointerCapture(event.pointerId);
+    singlePixelStepAlgorithm();
+    if (state.algorithmComplete) return;
+
+    stopSinglePixelStepHold();
+    state.singlePixelStepTimer = window.setInterval(() => {
+        singlePixelStepAlgorithm();
+        if (state.algorithmComplete) {
+            stopSinglePixelStepHold();
+        }
+    }, SINGLE_PIXEL_STEP_INTERVAL_MS);
+}
+
+function stopSinglePixelStepHold(): void {
+    if (state.singlePixelStepTimer === 0) return;
+    window.clearInterval(state.singlePixelStepTimer);
+    state.singlePixelStepTimer = 0;
+}
+
+function handleSinglePixelStepClick(): void {
+    if (state.suppressNextSinglePixelClick) {
+        state.suppressNextSinglePixelClick = false;
+        return;
+    }
+    singlePixelStepAlgorithm();
 }
 
 function runAlgorithmToEnd(): void {
@@ -655,6 +724,11 @@ function init(): void {
     });
     resetBtn.addEventListener("click", resetAlgorithm);
     stepBtn.addEventListener("click", stepAlgorithm);
+    singlePixelStepBtn.addEventListener("pointerdown", startSinglePixelStepHold);
+    singlePixelStepBtn.addEventListener("pointerup", stopSinglePixelStepHold);
+    singlePixelStepBtn.addEventListener("pointercancel", stopSinglePixelStepHold);
+    singlePixelStepBtn.addEventListener("lostpointercapture", stopSinglePixelStepHold);
+    singlePixelStepBtn.addEventListener("click", handleSinglePixelStepClick);
     runToEndBtn.addEventListener("click", runAlgorithmToEnd);
     togglePanelBtn.addEventListener("click", togglePanel);
 }
