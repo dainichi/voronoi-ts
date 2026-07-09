@@ -1,5 +1,5 @@
 import { Edge } from "./Edge.js";
-import { Point } from "./Point.js";
+import { Point } from "../Point.js";
 import { CircleEvent } from "./CircleEvent.js";
 
 export class Arc {

@@ -1,4 +1,4 @@
-import { Point } from "./Point.js";
+import { Point } from "../Point.js";
 
 export class SiteEvent {
     readonly x: number;

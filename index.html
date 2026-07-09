@@ -136,6 +136,13 @@
             cursor: pointer;
             transition: background-color 0.2s ease;
         }
+        select {
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            background: #fff;
+            font: inherit;
+        }
         button:hover {
             background: #f0f0f0;
         }
@@ -159,8 +166,12 @@
     <div id="app">
         <div id="toolbar">
             <div class="button-group">
+                <select id="mode-select" aria-label="Site type">
+                    <option value="points">Points</option>
+                    <option value="polygon">Polygon</option>
+                </select>
                 <button id="reset-btn">Reset</button>
-                <button id="step-btn">Step</button>
+                <button id="step-btn">Next event</button>
                 <button id="single-pixel-step-btn">1px Step</button>
                 <button id="run-to-end-btn">Run to End</button>
             </div>
@@ -181,7 +192,7 @@
                 </div>
             </div>
             <div class="section">
-                <div class="section-title">Points</div>
+                <div id="site-list-title" class="section-title">Points</div>
                 <div id="point-list"></div>
                 <div id="add-form">
                     <input id="coordinate-input" placeholder="x,y or x y" />

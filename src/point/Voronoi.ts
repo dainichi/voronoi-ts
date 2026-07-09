@@ -1,10 +1,10 @@
-import { Point } from "./Point.js";
+import { Point } from "../Point.js";
 import { Edge } from "./Edge.js";
 import { Arc } from "./Arc.js";
 import { SiteEvent } from "./SiteEvent.js";
 import { CircleEvent } from "./CircleEvent.js";
 import type { Event } from "./Event.js";
-import { parabolaIntersection } from "./Geometry.js";
+import { parabolaIntersection } from "../Geometry.js";
 
 function compareEvents(a: Event, b: Event): number {
   if(a.y !== b.y) return b.y - a.y;

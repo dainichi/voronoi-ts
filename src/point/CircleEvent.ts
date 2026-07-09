@@ -1,4 +1,4 @@
-import { Point } from "./Point.js";
+import { Point } from "../Point.js";
 import { Arc } from "./Arc.js";
 
 export class CircleEvent {
