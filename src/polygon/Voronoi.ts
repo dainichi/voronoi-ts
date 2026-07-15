@@ -4,18 +4,15 @@ import { Arc } from "./Arc.js";
 import { Vertex } from "./Vertex.js";
 import { PolygonEdge } from "./PolygonEdge.js";
 import { VertexEvent } from "./VertexEvent.js";
-import { CircleEvent } from "./CircleEvent.js";
+import { CircleEvent } from "../sweep/CircleEvent.js";
+import { EventQueue, purgeStaleCircleEvents } from "../sweep/EventQueue.js";
 import type { Event } from "./Event.js";
 import { arcIntersection, solve3x3 } from "../Geometry.js";
 
-function compareEvents(a: Event, b: Event): number {
-  if(a.y !== b.y) return b.y - a.y;
-  return a.x - b.x;
-}
 export class Voronoi {
   private static readonly EPS = 1e-9;
 
-  readonly pq: Event[] = [];
+  readonly pq = new EventQueue<Event>();
 
   beach : {head: Arc, tail: Arc} | null = null;
 
@@ -23,14 +20,6 @@ export class Voronoi {
   edges = new Set<VoronoiEdge>();
 
   sweepY = Infinity;
-
-  private addEvent(ev: Event): void {
-    let i = 0;
-    while (i < this.pq.length && compareEvents(this.pq[i], ev) <= 0) {
-      i++;
-    }
-    this.pq.splice(i, 0, ev);
-  }
 
   //wire up edges and vertices and add vertex events to the queue
   constructor(sites: Point[]) {
@@ -46,7 +35,7 @@ export class Voronoi {
     }
 
     for (const vertex of vertices) {
-      this.addEvent(new VertexEvent(vertex));
+      this.pq.push(new VertexEvent(vertex));
     }
   }
 
@@ -59,10 +48,10 @@ export class Voronoi {
 
     b.circleEvent = ce;
 
-    this.addEvent(ce);
+    this.pq.push(ce);
   }
 
-  private handleCircleEvent(ce: CircleEvent): void {
+  private handleCircleEvent(ce: CircleEvent<Arc>): void {
     const a = ce.arc;
     const vertex = ce.center;
 
@@ -80,8 +69,7 @@ export class Voronoi {
     left.next = right;
     right.prev = left;
 
-    const e = new VoronoiEdge(right.edge, left.edge);
-    e.start = vertex;
+    const e = new VoronoiEdge(right.edge, left.edge, vertex);
     this.edges.add(e);
 
     left.rightEdge = e;
@@ -117,14 +105,7 @@ export class Voronoi {
       this.centers.add(ev.center);
       this.handleCircleEvent(ev);
     }
-    while (
-      this.pq.length > 0 &&
-      this.pq[0] instanceof CircleEvent &&
-      (!(this.pq[0] as CircleEvent).valid ||
-        (this.pq[0] as CircleEvent).arc.circleEvent !== this.pq[0])
-    ) {
-      this.pq.shift();
-    }
+    purgeStaleCircleEvents(this.pq);
     return true;
   }
 
@@ -136,13 +117,11 @@ export class Voronoi {
     const v = ev.vertex;
 
     if (!this.beach) {
-      let a1 = new Arc(v.nextEdge!);
-      let a2 = new Arc(v.prevEdge!);
+      let a1 = new Arc(v.nextEdge!, undefined, 
+        new VoronoiEdge(v.prevEdge!, v.nextEdge!, v.p));
+      let a2 = new Arc(v.prevEdge!,a1);
       a1.next = a2;
-      a2.prev = a1;
-      a1.rightEdge = new VoronoiEdge(v.prevEdge!, v.nextEdge!);
-      a1.rightEdge.start = v.p;
-      this.edges.add(a1.rightEdge);
+      this.edges.add(a1.rightEdge!);
       this.beach = { head: a1, tail: a2 };
       return;
     }
@@ -159,8 +138,7 @@ export class Voronoi {
       a.next = this.beach.head;
       this.beach.head.prev = a;
       this.beach.head = a;
-      a.rightEdge = new VoronoiEdge(v.prevEdge!, v.nextEdge!);
-      a.rightEdge.start = v.p;
+      a.rightEdge = new VoronoiEdge(v.prevEdge!, v.nextEdge!, v.p);
       this.edges.add(a.rightEdge);
       this.checkCircle(a, a.next, a.next.next);
       return;
@@ -169,8 +147,7 @@ export class Voronoi {
       let a = new Arc(v.prevEdge!);
       a.prev = this.beach.tail;
       this.beach.tail.next = a;
-      this.beach.tail.rightEdge = new VoronoiEdge(v.prevEdge!, v.nextEdge!);
-      this.beach.tail.rightEdge.start = v.p;
+      this.beach.tail.rightEdge = new VoronoiEdge(v.prevEdge!, v.nextEdge!, v.p);
       this.edges.add(this.beach.tail.rightEdge);
       this.beach.tail = a;
       this.checkCircle(a.prev.prev, a.prev, a);

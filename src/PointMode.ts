@@ -11,7 +11,8 @@ import {
     type Viewport
 } from "./Viewport.js";
 import type { Arc } from "./point/Arc.js";
-import { CircleEvent } from "./point/CircleEvent.js";
+import { CircleEvent } from "./sweep/CircleEvent.js";
+import { purgeStaleCircleEvents } from "./sweep/EventQueue.js";
 import { Voronoi } from "./point/Voronoi.js";
 
 const SITES_KEY = "voronoi-ts-point-sites";
@@ -63,7 +64,7 @@ export class PointMode implements SiteMode {
 
     stepAlgorithm(): void {
         if (this.algorithmComplete) return;
-        const next = this.voronoi.pq[0];
+        const next = this.voronoi.pq.peek();
         this.lastCircle = next instanceof CircleEvent ? { center: next.center, radius: next.radius } : null;
         if (!this.voronoi.step()) {
             this.algorithmComplete = true;
@@ -74,7 +75,7 @@ export class PointMode implements SiteMode {
         if (this.algorithmComplete) return;
         this.discardInvalidCircleEvents();
 
-        const next = this.voronoi.pq[0];
+        const next = this.voronoi.pq.peek();
         const sweepY = this.voronoi.sweepY;
         if (!next || !Number.isFinite(sweepY)) {
             this.stepAlgorithm();
@@ -156,14 +157,7 @@ export class PointMode implements SiteMode {
     }
 
     private discardInvalidCircleEvents(): void {
-        while (
-            this.voronoi.pq.length > 0 &&
-            this.voronoi.pq[0] instanceof CircleEvent &&
-            (!(this.voronoi.pq[0] as CircleEvent).valid ||
-                (this.voronoi.pq[0] as CircleEvent).arc.circleEvent !== this.voronoi.pq[0])
-        ) {
-            this.voronoi.pq.shift();
-        }
+        purgeStaleCircleEvents(this.voronoi.pq);
     }
 
     private drawEdges(ctx: CanvasRenderingContext2D, viewport: Viewport, canvas: HTMLCanvasElement): void {

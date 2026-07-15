@@ -1,7 +1,6 @@
 import { Point } from "../Point.js";
-import { Arc } from "./Arc.js";
 
-export class CircleEvent {
+export class CircleEvent<A> {
     readonly x: number;
     readonly y: number;
     valid = true;
@@ -9,7 +8,7 @@ export class CircleEvent {
     constructor(
         public readonly center: Point,
         public readonly radius: number,
-        public readonly arc: Arc
+        public readonly arc: A,
     ) {
         this.x = center.x;
         this.y = center.y - radius;

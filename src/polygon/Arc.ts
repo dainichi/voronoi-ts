@@ -1,14 +1,16 @@
 import { VoronoiEdge } from "./VoronoiEdge.js";
-import { CircleEvent } from "./CircleEvent.js";
+import { CircleEvent } from "../sweep/CircleEvent.js";
 import { PolygonEdge } from "./PolygonEdge.js";
 
 export class Arc {
-    prev?: Arc;
-    next?: Arc;
-    circleEvent?: CircleEvent;
-    rightEdge?: VoronoiEdge;
+    circleEvent?: CircleEvent<Arc>;
 
-    constructor(public readonly edge: PolygonEdge) {}
+    constructor(
+        public readonly edge: PolygonEdge,
+        public prev?: Arc,
+        public rightEdge?: VoronoiEdge,
+        public next?: Arc
+    ) {}
 
     toString(): string {
         return `Arc(${this.edge})`;
