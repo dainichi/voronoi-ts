@@ -1,10 +1,11 @@
 import { Point } from "../Point.js";
 import { PolygonEdge } from "./PolygonEdge.js";
+import { Vertex } from "./Vertex.js";
 
-export class VoronoiEdge {
+export class CellBorder {
     constructor(
-        public readonly leftSite: PolygonEdge,
-        public readonly rightSite: PolygonEdge,
+        public readonly leftSite: PolygonEdge | Vertex,
+        public readonly rightSite: PolygonEdge | Vertex,
         public readonly start: Point,
         public end?: Point
     ) {}

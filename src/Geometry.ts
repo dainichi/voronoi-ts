@@ -1,5 +1,6 @@
 import { Point } from "./Point.js";
 import { PolygonEdge } from "./polygon/PolygonEdge.js";
+import { Vertex } from "./polygon/Vertex.js";
 
 export function parabolaIntersection(
   p1: Point,
@@ -27,12 +28,68 @@ export function parabolaY(p: Point, d: number, x: number): number {
   return (dx * dx / (p.y - d) + p.y + d) / 2;
 }
 
-export function arcIntersection(
-  e1: PolygonEdge,
-  e2: PolygonEdge,
+export function beachSegmentIntersection(
+  e1: PolygonEdge | Vertex,
+  e2: PolygonEdge | Vertex,
   sweepY: number,
 ): number[] {
-  return solve3x3([e1.matRow, e2.matRow, [0, 1, -1, sweepY]]);
+  if (e1 instanceof PolygonEdge && e2 instanceof PolygonEdge) {
+    return solve3x3([e1.matRow, e2.matRow, [0, 1, -1, sweepY]]);
+  } else if (e1 instanceof PolygonEdge && e1.start === e2) {
+    let [a, b, c, d] = e1.matRow;
+    const r = (e2.p.y - sweepY) / (1 - b);
+    const x = e2.p.x + a * r;
+    const y = e2.p.y + b * r;
+    return [x, y, r];
+  } else if (e2 instanceof PolygonEdge && e2.end === e1) { 
+    let [a,b,c,d] = e2.matRow;
+    const r = (e1.p.y - sweepY) / (1-b);
+    const x = e1.p.x + a * r;
+    const y = e1.p.y + b * r;
+    return [x,y,r];
+  }
+  else if (e2 instanceof PolygonEdge && e1 instanceof Vertex){
+    let [a,b,,c] = e2.matRow;
+
+    // Direction vector of
+    // a*x + (b-1)*y = c-sweepY
+    const vx = 1 - b;
+    const vy = a;
+
+    // A point on the line
+    let x0: number;
+    let y0: number;
+
+    if (Math.abs(a) > 1e-12) {
+        y0 = 0;
+        x0 = (c - sweepY) / a;
+    } else {
+        x0 = 0;
+        y0 = (c - sweepY) / (b - 1);
+    }
+
+    const dx = x0 - e1.p.x;
+    const dy = y0 - e1.p.y;
+
+    const A = vx * vx;
+    const B = 2 * (dx * vx + dy * vy) - 2 * vy * (y0 - sweepY);
+    const C = dx * dx + dy * dy - (y0 - sweepY) * (y0 - sweepY);
+
+    const disc = B * B - 4 * A * C;
+
+    const sqrtDisc = Math.sqrt(Math.max(0, disc));
+
+    const s = (-B + sqrtDisc) / (2 * A);
+
+    const x = x0 + s * vx;
+    const y = y0 + s * vy;
+    const r = y - sweepY;
+
+    return [x,y,r];
+} else {
+    console.log("Cannot caluclate intersection for " + e1.toString() + e2.toString());
+    return [];
+  }
 }
 
 export function solve3x3(

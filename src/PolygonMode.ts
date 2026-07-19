@@ -1,4 +1,4 @@
-import { arcIntersection } from "./Geometry.js";
+import { beachSegmentIntersection, parabolaIntersection, parabolaY } from "./Geometry.js";
 import { Point } from "./Point.js";
 import type { SiteMode } from "./SiteMode.js";
 import {
@@ -9,10 +9,11 @@ import {
     type Bounds,
     type Viewport
 } from "./Viewport.js";
-import type { Arc } from "./polygon/Arc.js";
+import type { BeachSegment } from "./polygon/BeachSegment.js";
 import { CircleEvent } from "./sweep/CircleEvent.js";
 import { purgeStaleCircleEvents } from "./sweep/EventQueue.js";
 import { Voronoi } from "./polygon/Voronoi.js";
+import { PolygonEdge } from "./polygon/PolygonEdge.js";
 
 const SITES_KEY = "voronoi-ts-polygon-sites";
 
@@ -116,7 +117,7 @@ export class PolygonMode implements SiteMode {
 
     getVertices(): Point[] {
         const points = new Map<string, Point>();
-        this.voronoi.edges.forEach((edge) => {
+        this.voronoi.borders.forEach((edge) => {
             if (edge.start) {
                 points.set(`${edge.start.x.toFixed(4)},${edge.start.y.toFixed(4)}`, edge.start);
             }
@@ -135,7 +136,7 @@ export class PolygonMode implements SiteMode {
         if (isIntermediate) {
             drawSweepLine(ctx, viewport, canvas, sweepY);
             this.drawCircleEvents(ctx, viewport);
-            this.drawBeachLine(ctx, viewport);
+            this.drawBeachLine(ctx, viewport, canvas);
         }
         if (this.lastCircle) {
             ctx.save();
@@ -158,19 +159,19 @@ export class PolygonMode implements SiteMode {
         ctx.strokeStyle = "#666";
         ctx.lineWidth = 1.5;
         const sweepY = this.voronoi.sweepY;
-        this.voronoi.edges.forEach((edge) => {
-            if (edge.start && edge.end) {
-                drawLine(ctx, viewport, edge.start, edge.end);
+        this.voronoi.borders.forEach((border) => {
+            if (border.start && border.end) {
+                drawLine(ctx, viewport, border.start, border.end);
                 return;
             }
 
-            if (!edge.start) return;
+            if (!border.start) return;
 
-            const [x2, y2] = edge.end
-                ? [edge.end.x, edge.end.y]
-                : arcIntersection(edge.rightSite, edge.leftSite, sweepY).slice(0, 2);
+            const [x2, y2] = border.end
+                ? [border.end.x, border.end.y]
+                : beachSegmentIntersection(border.rightSite, border.leftSite, sweepY).slice(0, 2);
 
-            drawLine(ctx, viewport, edge.start, new Point(x2, y2));
+            drawLine(ctx, viewport, border.start, new Point(x2, y2));
         });
         ctx.restore();
     }
@@ -228,7 +229,7 @@ export class PolygonMode implements SiteMode {
         ctx.save();
         ctx.strokeStyle = "#4a90e2";
         ctx.lineWidth = 1;
-        let arc: Arc | undefined = this.voronoi.beach.head;
+        let arc: BeachSegment | undefined = this.voronoi.beach.head;
         while (arc) {
             const ce = arc.circleEvent;
             if (ce && ce.valid) {
@@ -239,7 +240,7 @@ export class PolygonMode implements SiteMode {
         ctx.restore();
     }
 
-    private drawBeachLine(ctx: CanvasRenderingContext2D, viewport: Viewport): void {
+    private drawBeachLine(ctx: CanvasRenderingContext2D, viewport: Viewport, canvas: HTMLCanvasElement): void {
         if (!this.voronoi.beach) return;
         const sweepY = this.voronoi.sweepY;
         if (!Number.isFinite(sweepY)) return;
@@ -249,33 +250,70 @@ export class PolygonMode implements SiteMode {
         ctx.lineWidth = 1.2;
         ctx.setLineDash([6, 4]);
 
-        let arc: Arc | undefined = this.voronoi.beach.head;
+        let arc: BeachSegment | undefined = this.voronoi.beach.head;
         while (arc) {
-            this.drawBeachArc(ctx, viewport, arc, sweepY);
+            this.drawBeachSegment(ctx, viewport, arc, sweepY, canvas);
             arc = arc.next;
         }
 
         ctx.restore();
     }
 
-    private drawBeachArc(ctx: CanvasRenderingContext2D, viewport: Viewport, arc: Arc, sweepY: number): void {
-        const [x1, y1] = arc.prev
-            ? arcIntersection(arc.prev.edge, arc.edge, sweepY).slice(0, 2)
-            : [
-                arc.edge.start.p.x + (arc.edge.end.p.x - arc.edge.start.p.x) * (sweepY - arc.edge.start.p.y) / (arc.edge.end.p.y - arc.edge.start.p.y),
-                sweepY
-            ];
+    private drawBeachSegment(ctx: CanvasRenderingContext2D, viewport: Viewport, arc: BeachSegment, sweepY: number, canvas: HTMLCanvasElement): void {
+        if (arc.site instanceof PolygonEdge ) {
+            const [x1, y1] = arc.prev
+                ? beachSegmentIntersection(arc.prev.site, arc.site, sweepY).slice(0, 2)
+                : [
+                    arc.site.start.p.x + (arc.site.end.p.x - arc.site.start.p.x) * (sweepY - arc.site.start.p.y) / (arc.site.end.p.y - arc.site.start.p.y),
+                    sweepY
+                ];
 
-        const [x2, y2] = arc.next
-            ? arcIntersection(arc.edge, arc.next.edge, sweepY).slice(0, 2)
-            : [
-                arc.edge.start.p.x + (arc.edge.end.p.x - arc.edge.start.p.x) * (sweepY - arc.edge.start.p.y) / (arc.edge.end.p.y - arc.edge.start.p.y),
-                sweepY
-            ];
+            const [x2, y2] = arc.next
+                ? beachSegmentIntersection(arc.site, arc.next.site, sweepY).slice(0, 2)
+                : [
+                    arc.site.start.p.x + (arc.site.end.p.x - arc.site.start.p.x) * (sweepY - arc.site.start.p.y) / (arc.site.end.p.y - arc.site.start.p.y),
+                    sweepY
+                ];
 
-        ctx.beginPath();
-        ctx.moveTo(viewport.worldToScreenX(x1), viewport.worldToScreenY(y1));
-        ctx.lineTo(viewport.worldToScreenX(x2), viewport.worldToScreenY(y2));
-        ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(viewport.worldToScreenX(x1), viewport.worldToScreenY(y1));
+            ctx.lineTo(viewport.worldToScreenX(x2), viewport.worldToScreenY(y2));
+            ctx.stroke();
+        } else {
+            let leftX = viewport.screenToWorldX(0);
+            let rightX = viewport.screenToWorldX(canvas.getBoundingClientRect().width);
+            if (arc.prev) {
+                const [x,,] = beachSegmentIntersection(arc.prev.site, arc.site, sweepY);
+                if (Number.isFinite(x)) leftX = x;
+            }
+            if (arc.next) {
+                const [x,,] = beachSegmentIntersection(arc.site, arc.next.site, sweepY);
+                if (Number.isFinite(x)) rightX = x;
+            }
+            if (rightX <= leftX) return;
+    
+            const samples = Math.min(Math.max(2, Math.floor(Math.abs(viewport.worldToScreenX(rightX) - viewport.worldToScreenX(leftX)))), 5000);
+            const dx = (rightX - leftX) / samples;
+            let started = false;
+    
+            ctx.beginPath();
+            for (let i = 0; i <= samples; i++) {
+                const x = leftX + dx * i;
+                const y = parabolaY(arc.site.p, sweepY, x);
+                if (!Number.isFinite(y) || y < sweepY) {
+                    started = false;
+                    continue;
+                }
+                const sx = viewport.worldToScreenX(x);
+                const sy = viewport.worldToScreenY(y);
+                if (!started) {
+                    ctx.moveTo(sx, sy);
+                    started = true;
+                } else {
+                    ctx.lineTo(sx, sy);
+                }
+            }
+            ctx.stroke();
+        }
     }
 }

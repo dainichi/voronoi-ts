@@ -13,9 +13,9 @@ describe("Polygon Voronoi", () => {
         const center = voronoi.centers.values().next().value!;
         expect(center.x).toBeCloseTo(2);
         expect(center.y).toBeCloseTo(1.236);
-        expect(voronoi.edges.size).toEqual(3);
+        expect(voronoi.borders.size).toEqual(3);
 
-        const edges = Array.from(voronoi.edges);
+        const edges = Array.from(voronoi.borders);
         expect(edges.some((edge) => edge.start !== null || edge.end !== null)).toBe(true);
     });
 });
