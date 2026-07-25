@@ -174,10 +174,12 @@ function updateVertexList(): void {
         vertexList.textContent = "No vertices yet.";
         return;
     }
-    vertices.forEach((vertex) => {
+    vertices.forEach(({point, label}, index) => {
         const row = document.createElement("div");
         row.className = "list-item";
-        row.textContent = `(${vertex.x.toFixed(1)}, ${vertex.y.toFixed(1)})`;
+        row.textContent = `(${point.x.toFixed(1)}, ${point.y.toFixed(1)})`;
+        row.addEventListener("mouseenter", () => { activeMode.selectVoronoiVertex(index); draw(); });
+        row.addEventListener("mouseleave", () => { activeMode.selectVoronoiVertex(-1); draw(); });
         vertexList.appendChild(row);
     });
 }

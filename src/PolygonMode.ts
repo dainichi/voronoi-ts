@@ -12,8 +12,9 @@ import {
 import type { BeachSegment } from "./polygon/BeachSegment.js";
 import { CircleEvent } from "./sweep/CircleEvent.js";
 import { purgeStaleCircleEvents } from "./sweep/EventQueue.js";
-import { Voronoi } from "./polygon/Voronoi.js";
+import { Voronoi, type VoronoiCenter } from "./polygon/Voronoi.js";
 import { PolygonEdge } from "./polygon/PolygonEdge.js";
+import { Vertex } from "./polygon/Vertex.js";
 
 const SITES_KEY = "voronoi-ts-polygon-sites";
 
@@ -27,6 +28,8 @@ export class PolygonMode implements SiteMode {
     sites = [new Point(2, 4), new Point(0, 0), new Point(4, 0)];
     selectedIndex = -1;
     algorithmComplete = false;
+    hoveredCenter: VoronoiCenter | null = null;
+    selectedCenter: VoronoiCenter | null = null;
 
     private voronoi = new Voronoi([]);
     private lastCircle: { center: Point; radius: number } | null = null;
@@ -54,6 +57,8 @@ export class PolygonMode implements SiteMode {
         this.voronoi = new Voronoi(this.sites.map((s) => new Point(s.x, s.y)));
         this.algorithmComplete = false;
         this.lastCircle = null;
+        this.hoveredCenter = null;
+        this.selectedCenter = null;
     }
 
     stepAlgorithm(): void {
@@ -115,39 +120,55 @@ export class PolygonMode implements SiteMode {
         this.resetAlgorithm();
     }
 
-    getVertices(): Point[] {
-        const points = new Map<string, Point>();
-        this.voronoi.borders.forEach((edge) => {
-            if (edge.start) {
-                points.set(`${edge.start.x.toFixed(4)},${edge.start.y.toFixed(4)}`, edge.start);
+    getVertices(): { point: Point; label: string }[] {
+        return Array.from(this.voronoi.centers).map(vc => ({
+            point: vc.center,
+            label: `r=${vc.radius.toFixed(2)}`,
+        }));
+    }
+
+    onHover(screenX: number, screenY: number, viewport: Viewport): boolean {
+        const threshold = 10;
+        for (const vc of this.voronoi.centers) {
+            const s = viewport.worldToScreen(vc.center);
+            if (Math.hypot(s.x - screenX, s.y - screenY) < threshold) {
+                if(this.hoveredCenter === vc) return false;
+                this.hoveredCenter = vc;
+                return true;
             }
-            if (edge.end) {
-                points.set(`${edge.end.x.toFixed(4)},${edge.end.y.toFixed(4)}`, edge.end);
-            }
-        });
-        return Array.from(points.values());
+        }
+        if (this.hoveredCenter === null) return false;{
+            this.hoveredCenter = null;
+            return true;
+        }
+    }
+
+    selectVoronoiVertex(index: number): void {
+        const all = Array.from(this.voronoi.centers);
+        this.selectedCenter = all[index] ?? null;
     }
 
     draw(ctx: CanvasRenderingContext2D, viewport: Viewport, canvas: HTMLCanvasElement): void {
         const sweepY = this.voronoi.sweepY;
         const isIntermediate = Number.isFinite(sweepY) && sweepY !== Infinity;
 
+        this.drawPolygon(ctx, viewport);
+        this.drawProcessedCenters(ctx, viewport);
         this.drawEdges(ctx, viewport);
         if (isIntermediate) {
             drawSweepLine(ctx, viewport, canvas, sweepY);
             this.drawCircleEvents(ctx, viewport);
             this.drawBeachLine(ctx, viewport, canvas);
         }
-        if (this.lastCircle) {
+        const focusedCircle = this.lastCircle ?? this.hoveredCenter ?? this.selectedCenter;
+        if (focusedCircle) {
             ctx.save();
             ctx.strokeStyle = "#4a90e2";
             ctx.lineWidth = 1.5;
             ctx.setLineDash([6, 4]);
-            drawCircle(ctx, viewport, this.lastCircle.center, this.lastCircle.radius);
+            drawCircle(ctx, viewport, focusedCircle.center, focusedCircle.radius);
             ctx.restore();
         }
-        this.drawProcessedCenters(ctx, viewport);
-        this.drawPolygon(ctx, viewport);
     }
 
     private discardInvalidCircleEvents(): void {
@@ -160,20 +181,64 @@ export class PolygonMode implements SiteMode {
         ctx.lineWidth = 1.5;
         const sweepY = this.voronoi.sweepY;
         this.voronoi.borders.forEach((border) => {
-            if (border.start && border.end) {
-                drawLine(ctx, viewport, border.start, border.end);
-                return;
-            }
-
             if (!border.start) return;
 
-            const [x2, y2] = border.end
-                ? [border.end.x, border.end.y]
-                : beachSegmentIntersection(border.rightSite, border.leftSite, sweepY).slice(0, 2);
+            let endPt: Point;
+            if (border.end) {
+                endPt = border.end;
+            } else {
+                const arr = beachSegmentIntersection(border.rightSite, border.leftSite, sweepY);
+                if (arr.length < 2 || !Number.isFinite(arr[0])) return;
+                endPt = new Point(arr[0], arr[1]);
+            }
 
-            drawLine(ctx, viewport, border.start, new Point(x2, y2));
+            const {leftSite, rightSite} = border;
+            if (leftSite instanceof Vertex && rightSite instanceof PolygonEdge) {
+                this.drawParabolaSegment(ctx, viewport, leftSite, rightSite, border.start, endPt);
+            } else if (leftSite instanceof PolygonEdge && rightSite instanceof Vertex) {
+                this.drawParabolaSegment(ctx, viewport, rightSite, leftSite, border.start, endPt);
+            } else {
+                drawLine(ctx, viewport, border.start, endPt);
+            }
         });
         ctx.restore();
+    }
+
+    private drawParabolaSegment(
+        ctx: CanvasRenderingContext2D,
+        viewport: Viewport,
+        vertex: Vertex,
+        edge: PolygonEdge,
+        start: Point,
+        end: Point
+    ): void {
+        const [a, b,, d] = edge.matRow;
+        const p = (a * vertex.p.x + b * vertex.p.y - d) / 2;
+        if (Math.abs(p) < 1e-12) { drawLine(ctx, viewport, start, end); return; }
+
+        const Vx = vertex.p.x - p * a, Vy = vertex.p.y - p * b;
+        const uStart = -b * (start.x - Vx) + a * (start.y - Vy);
+        const uEnd   = -b * (end.x   - Vx) + a * (end.y   - Vy);
+
+        // Arc-length estimate via midpoint for sample count
+        const uMid = (uStart + uEnd) / 2, vMid = uMid * uMid / (4 * p);
+        const msx = viewport.worldToScreenX(Vx + uMid * (-b) + vMid * a);
+        const msy = viewport.worldToScreenY(Vy + uMid *  a   + vMid * b);
+        const ssx = viewport.worldToScreenX(start.x), ssy = viewport.worldToScreenY(start.y);
+        const sex = viewport.worldToScreenX(end.x), sey = viewport.worldToScreenY(end.y);
+        const N = Math.min(5000, Math.max(2, Math.ceil(
+            Math.hypot(msx - ssx, msy - ssy) + Math.hypot(sex - msx, sey - msy)
+        )));
+
+        ctx.beginPath();
+        for (let i = 0; i <= N; i++) {
+            const u = uStart + (uEnd - uStart) * i / N;
+            const v = u * u / (4 * p);
+            const scx = viewport.worldToScreenX(Vx + u * (-b) + v * a);
+            const scy = viewport.worldToScreenY(Vy + u *  a   + v * b);
+            if (i === 0) ctx.moveTo(scx, scy); else ctx.lineTo(scx, scy);
+        }
+        ctx.stroke();
     }
 
     private drawPolygon(ctx: CanvasRenderingContext2D, viewport: Viewport): void {
@@ -215,7 +280,7 @@ export class PolygonMode implements SiteMode {
         if (this.voronoi.centers.size === 0) return;
         ctx.save();
         ctx.fillStyle = "#c71585";
-        for (const center of this.voronoi.centers) {
+        for (const { center } of this.voronoi.centers) {
             const s = viewport.worldToScreen(center);
             ctx.beginPath();
             ctx.arc(s.x, s.y, 4, 0, Math.PI * 2);
@@ -225,23 +290,25 @@ export class PolygonMode implements SiteMode {
     }
 
     private drawCircleEvents(ctx: CanvasRenderingContext2D, viewport: Viewport): void {
-        if (!this.voronoi.beach) return;
+        if (this.voronoi.beachSections.length === 0) return;
         ctx.save();
         ctx.strokeStyle = "#4a90e2";
         ctx.lineWidth = 1;
-        let arc: BeachSegment | undefined = this.voronoi.beach.head;
-        while (arc) {
-            const ce = arc.circleEvent;
-            if (ce && ce.valid) {
-                drawCircle(ctx, viewport, ce.center, ce.radius);
+        for (const { head } of this.voronoi.beachSections) {
+            let arc: BeachSegment | undefined = head;
+            while (arc) {
+                const ce = arc.circleEvent;
+                if (ce && ce.valid) {
+                    drawCircle(ctx, viewport, ce.center, ce.radius);
+                }
+                arc = arc.next;
             }
-            arc = arc.next;
         }
         ctx.restore();
     }
 
     private drawBeachLine(ctx: CanvasRenderingContext2D, viewport: Viewport, canvas: HTMLCanvasElement): void {
-        if (!this.voronoi.beach) return;
+        if (this.voronoi.beachSections.length === 0) return;
         const sweepY = this.voronoi.sweepY;
         if (!Number.isFinite(sweepY)) return;
 
@@ -250,10 +317,12 @@ export class PolygonMode implements SiteMode {
         ctx.lineWidth = 1.2;
         ctx.setLineDash([6, 4]);
 
-        let arc: BeachSegment | undefined = this.voronoi.beach.head;
-        while (arc) {
-            this.drawBeachSegment(ctx, viewport, arc, sweepY, canvas);
-            arc = arc.next;
+        for (const { head } of this.voronoi.beachSections) {
+            let arc: BeachSegment | undefined = head;
+            while (arc) {
+                this.drawBeachSegment(ctx, viewport, arc, sweepY, canvas);
+                arc = arc.next;
+            }
         }
 
         ctx.restore();
@@ -316,4 +385,6 @@ export class PolygonMode implements SiteMode {
             ctx.stroke();
         }
     }
+
+    
 }

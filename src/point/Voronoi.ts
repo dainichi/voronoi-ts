@@ -13,7 +13,7 @@ export class Voronoi {
   readonly pq = new EventQueue<Event>();
 
   beachRoot: Arc | null = null;
-  centers = new Set<Point>();
+  centers = new Set<{ center: Point; radius: number }>();
   edges = new Set<Edge>();
 
   sweepY = Infinity;
@@ -117,7 +117,7 @@ export class Voronoi {
     if (ev instanceof SiteEvent) {
       this.handleSiteEvent(ev);
     } else if (ev instanceof CircleEvent) {
-      this.centers.add(ev.center);
+      this.centers.add({ center: ev.center, radius: ev.radius });
       this.handleCircleEvent(ev);
     }
     purgeStaleCircleEvents(this.pq);

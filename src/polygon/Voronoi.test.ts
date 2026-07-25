@@ -10,9 +10,10 @@ describe("Polygon Voronoi", () => {
         voronoi.compute();
 
         expect(voronoi.centers.size).toEqual(1);
-        const center = voronoi.centers.values().next().value!;
+        const {center, radius} = voronoi.centers.values().next().value!;
         expect(center.x).toBeCloseTo(2);
         expect(center.y).toBeCloseTo(1.236);
+        expect(radius).toBeGreaterThan(0)
         expect(voronoi.borders.size).toEqual(3);
 
         const edges = Array.from(voronoi.borders);

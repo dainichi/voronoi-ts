@@ -21,6 +21,8 @@ export interface SiteMode {
     addSite(point: Point): void;
     removeSite(index: number): void;
     moveSite(index: number, point: Point): void;
-    getVertices(): Point[];
+    getVertices(): { point: Point; label?: string }[];
+    onHover(screenX: number, screenY: number, viewport: Viewport): boolean;
+    selectVoronoiVertex(index: number): void;
     draw(ctx: CanvasRenderingContext2D, viewport: Viewport, canvas: HTMLCanvasElement): void;
 }

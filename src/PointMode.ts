@@ -36,6 +36,8 @@ export class PointMode implements SiteMode {
 
     private voronoi = new Voronoi([]);
     private lastCircle: { center: Point; radius: number } | null = null;
+    hoveredCenter: {center: Point; radius: number} | null = null;
+    selectedCenter: {center: Point; radius: number} | null = null;
 
     loadSites(): void {
         const stored = localStorage.getItem(SITES_KEY) ?? localStorage.getItem(LEGACY_SITES_KEY);
@@ -60,6 +62,8 @@ export class PointMode implements SiteMode {
         this.voronoi = new Voronoi(this.sites.map((s) => new Point(s.x, s.y)));
         this.algorithmComplete = false;
         this.lastCircle = null;
+        this.hoveredCenter = null;
+        this.selectedCenter = null;
     }
 
     stepAlgorithm(): void {
@@ -121,17 +125,31 @@ export class PointMode implements SiteMode {
         this.resetAlgorithm();
     }
 
-    getVertices(): Point[] {
-        const points = new Map<string, Point>();
-        this.voronoi.edges.forEach((edge) => {
-            if (edge.start) {
-                points.set(`${edge.start.x.toFixed(4)},${edge.start.y.toFixed(4)}`, edge.start);
+    getVertices(): {point: Point; label: string}[] {
+        return Array.from(this.voronoi.centers).map(vc => ({
+            point: vc.center,
+            label: `r = ${vc.radius.toFixed(2)}`
+        }));
+    }
+
+    onHover(screenX: number, screenY: number, viewport: Viewport): boolean {
+        const threshold = 10;
+        for (const vc of this.voronoi.centers) {
+            const s = viewport.worldToScreen(vc.center);
+            if (Math.hypot(s.x - screenX, s.y - screenY) < threshold) {
+                if (this.hoveredCenter === vc) return false;
+                this.hoveredCenter = vc;
+                return true;
             }
-            if (edge.end) {
-                points.set(`${edge.end.x.toFixed(4)},${edge.end.y.toFixed(4)}`, edge.end);
-            }
-        });
-        return Array.from(points.values());
+        }
+        if (this.hoveredCenter === null) return false;
+        this.hoveredCenter = null;
+        return true;
+    }
+
+    selectVoronoiVertex(index: number):void {
+        const all = Array.from(this.voronoi.centers);
+        this.selectedCenter = all[index] ?? null;
     }
 
     draw(ctx: CanvasRenderingContext2D, viewport: Viewport, canvas: HTMLCanvasElement): void {
@@ -144,12 +162,13 @@ export class PointMode implements SiteMode {
             this.drawCircleEvents(ctx, viewport);
             this.drawBeachLine(ctx, viewport, canvas);
         }
-        if (this.lastCircle) {
+        const focusedCircle = this.lastCircle ?? this.hoveredCenter ?? this.selectedCenter;
+        if (focusedCircle) {
             ctx.save();
             ctx.strokeStyle = "#4a90e2";
             ctx.lineWidth = 1.5;
             ctx.setLineDash([6, 4]);
-            drawCircle(ctx, viewport, this.lastCircle.center, this.lastCircle.radius);
+            drawCircle(ctx, viewport, focusedCircle.center, focusedCircle.radius);
             ctx.restore();
         }
         this.drawProcessedCenters(ctx, viewport);
@@ -245,7 +264,7 @@ export class PointMode implements SiteMode {
         if (this.voronoi.centers.size === 0) return;
         ctx.save();
         ctx.fillStyle = "#c71585";
-        for (const center of this.voronoi.centers) {
+        for (const {center} of this.voronoi.centers) {
             const s = viewport.worldToScreen(center);
             ctx.beginPath();
             ctx.arc(s.x, s.y, 4, 0, Math.PI * 2);
