@@ -50,9 +50,42 @@ export class Voronoi {
     this.pq.push(ce);
   }
 
-  private checkCircle(a?: BeachSegment, b?: BeachSegment, c?: BeachSegment): void {
-    if (!a || !b || !c) return;
-    const as = a.site, bs = b.site, cs = c.site;
+  private addNewCellBorder(left: PolygonEdge | Vertex, right: PolygonEdge | Vertex, start: Point, end?: Point){
+    const a = new CellBorder(left, right, start, end);
+    this.borders.add(a);
+    return a;
+  }
+
+  private checkCircle1V2E(as: Vertex, bs:PolygonEdge, cs:PolygonEdge, b:BeachSegment): void {
+    // angle bisector of bs and cs as the line
+    const [a1,b1,,c1] = bs.matRow;
+    const [a2,b2,,c2] = cs.matRow;
+    const A = a1 - a2, B = b1 - b2, C = c1 - c2;
+    // direction along the line
+    const vx = -B, vy = A;
+    const x0 = Math.abs(A) > 1e-12 ? C / A : 0;
+    const y0 = Math.abs(A) > 1e-12 ? 0 : C / B;
+    const circles = circleCenterOnLine(x0,y0,vx,vy,as.p.x,as.p.y,a1*x0+b1*y0-c1,a1*vx+b1*vy).filter(([x,y,r]) => as.inCone(x,y));
+    if (circles.length != 1) console.log ("1V2E "+circles.length +" circle events");
+    circles.forEach(([x,y,r]) => this.emitCircle(x,y,r,b));
+  }
+
+  private checkCircle1E2V(as: PolygonEdge, bs: Vertex, cs: Vertex, b:BeachSegment): void {
+    // general (E, V, V): perpendicular bisector of bs and cs as the line
+    const [aa,ab,,ad] = as.matRow;
+    const A = 2 * (cs.p.x - bs.p.x), B = 2 * (cs.p.y - bs.p.y);
+    const C = cs.p.x * cs.p.x + cs.p.y * cs.p.y - bs.p.x * bs.p.x - bs.p.y * bs.p.y;
+    const vx = -B, vy = A;
+    const x0 = Math.abs(A) > 1e-12 ? C / A : 0;
+    const y0 = Math.abs(A) > 1e-12 ? 0 : C / B;
+    const circles = circleCenterOnLine(x0,y0,vx,vy,bs.p.x,bs.p.y,aa*x0+ab*y0-ad, aa*vx+ab*vy).filter(([x,y,r]) => bs.inCone(x,y) && cs.inCone(x,y));
+    if (circles.length != 1) console.log ("1E2V "+circles.length +" circle events");
+    circles.forEach(([x,y,r]) => this.emitCircle(x,y,r,b));
+  }
+
+  private checkCircle(b?: BeachSegment): void {
+    if (!b || !b.prev || !b.next) return;
+    const as = b.prev.site, bs = b.site, cs = b.next.site;
 
     if (as instanceof PolygonEdge && bs instanceof PolygonEdge && cs instanceof PolygonEdge) {
       const [x, y, r] = solve3x3([as.matRow, bs.matRow, cs.matRow]);
@@ -62,17 +95,7 @@ export class Voronoi {
         const [x, y, r] = circleCenterAtEdgeEnd(as, bs, cs);
         this.emitCircle(x, y, r, b);
       } else {
-        // angle bisector of bs and cs as the line
-        const [a1,b1,,c1] = bs.matRow;
-        const [a2,b2,,c2] = cs.matRow;
-        const A = a1 - a2, B = b1 - b2, C = c1 - c2;
-        // direction along the line
-        const vx = -B, vy = A;
-        const x0 = Math.abs(A) > 1e-12 ? C / A : 0;
-        const y0 = Math.abs(A) > 1e-12 ? 0 : C / B;
-        const circles = circleCenterOnLine(x0,y0,vx,vy,as.p.x,as.p.y,a1*x0+b1*y0-c1,a1*vx+b1*vy).filter(([x,y,r]) => as.inCone(x,y));
-        if (circles.length != 1) console.log ("(V,E,E) "+circles.length +" circle events");
-        circles.forEach(([x,y,r]) => this.emitCircle(x,y,r,b));
+        this.checkCircle1V2E(as,bs,cs,b);
       }
     } else if (as instanceof PolygonEdge && bs instanceof Vertex && cs instanceof PolygonEdge) {
       if (as.start === bs && cs.end === bs) {
@@ -84,34 +107,14 @@ export class Voronoi {
         const [x,y,r] = circleCenterAtEdgeEnd(bs, cs, as);
         this.emitCircle(x, y, r, b);
       } else {
-        // general (E,V,E) case: angle bisector of as and cs as the line
-        const [a1,b1,,c1] = as.matRow;
-        const [a2,b2,,c2] = cs.matRow;
-        const A = a1 - a2, B = b1 - b2, C = c1 - c2;
-        // direction along the line
-        const vx = -B, vy = A;
-        const x0 = Math.abs(A) > 1e-12 ? C / A : 0;
-        const y0 = Math.abs(A) > 1e-12 ? 0 : C / B;
-        const circles = circleCenterOnLine(x0,y0,vx,vy,bs.p.x,bs.p.y,a1*x0+b1*y0-c1,a1*vx+b1*vy).filter(([x,y,r]) => bs.inCone(x,y));
-        if (circles.length != 1) console.log ("(E,V,E) "+circles.length +" circle events");
-        circles.forEach(([x,y,r]) => this.emitCircle(x,y,r,b));
+        this.checkCircle1V2E(bs,as,cs,b);
       }
     } else if (as instanceof PolygonEdge && bs instanceof PolygonEdge && cs instanceof Vertex) {
       if (bs.start === cs) {
         const [x, y, r] = circleCenterAtEdgeEnd(cs, bs, as);
         this.emitCircle(x, y, r, b);
       } else {
-        // general (E, E, V) case: angle bisector of as and bs as the line
-        const [a1,b1,,c1] = as.matRow;
-        const [a2,b2,,c2] = bs.matRow;
-        const A = a1 - a2, B = b1 - b2, C = c1 - c2;
-        // direction along the line
-        const vx = -B, vy = A;
-        const x0 = Math.abs(A) > 1e-12 ? C / A : 0;
-        const y0 = Math.abs(A) > 1e-12 ? 0 : C / B;
-        const circles = circleCenterOnLine(x0,y0,vx,vy,cs.p.x,cs.p.y,a2*x0+b2*y0-c2,a2*vx+b2*vy).filter(([x,y,r]) => cs.inCone(x,y));
-        if (circles.length != 1) console.log ("(E,E,V) "+circles.length +" circle events");
-        circles.forEach(([x,y,r]) => this.emitCircle(x,y,r,b));
+        this.checkCircle1V2E(cs,as,bs,b);
       }
     } else if (as instanceof Vertex && bs instanceof PolygonEdge && cs instanceof Vertex) {
       if (bs.start === as || bs.end === as) {
@@ -131,16 +134,7 @@ export class Voronoi {
           this.emitCircle(cs.p.x + r*ba, cs.p.y + r * bb, r, b);
         }
       } else {
-        // general (V, E, V): perpendicular bisector of as and cs as the line
-        const [ba,bb,,bd] = bs.matRow;
-        const A = 2 * (cs.p.x - as.p.x), B = 2 * (cs.p.y - as.p.y);
-        const C = cs.p.x * cs.p.x + cs.p.y * cs.p.y - as.p.x * as.p.x - as.p.y * as.p.y;
-        const vx = -B, vy = A;
-        const x0 = Math.abs(A) > 1e-12 ? C / A : 0;
-        const y0 = Math.abs(A) > 1e-12 ? 0 : C / B;
-        const circles = circleCenterOnLine(x0,y0,vx,vy,as.p.x,as.p.y,ba*x0+bb*y0-bd, ba*vx+bb*vy).filter(([x,y,r]) => as.inCone(x,y) && cs.inCone(x,y));
-        if (circles.length != 1) console.log ("(V,E,V) "+circles.length +" circle events");
-        circles.forEach(([x,y,r]) => this.emitCircle(x,y,r,b));
+        this.checkCircle1E2V(bs,as,cs,b);
       }
     } else if (as instanceof Vertex && bs instanceof Vertex && cs instanceof PolygonEdge) {
       if (cs.end === bs) {
@@ -152,16 +146,7 @@ export class Voronoi {
           this.emitCircle(bs.p.x + r * ca, bs.p.y + r * cb, r, b);
         }
       } else {
-        //perpendicular bisector of as and bs as the line
-        const [ca,cb,,cd] = cs.matRow;
-        const A = 2 * (bs.p.x - as.p.x), B = 2 * (bs.p.y - as.p.y);
-        const C = bs.p.x * bs.p.x + bs.p.y * bs.p.y - as.p.x * as.p.x - as.p.y * as.p.y;
-        const vx = -B, vy = A;
-        const x0 = Math.abs(A) > 1e-12 ? C / A : 0;
-        const y0 = Math.abs(A) > 1e-12 ? 0 : C / B;
-        const circles = circleCenterOnLine(x0,y0,vx,vy,bs.p.x,bs.p.y,ca*x0+cb*y0-cd, ca*vx+cb*vy).filter(([x,y,r]) => as.inCone(x,y) && bs.inCone(x,y));
-        if (circles.length != 1) console.log ("(V,V,E) "+circles.length +" circle events");
-        circles.forEach(([x,y,r]) => this.emitCircle(x,y,r,b));
+        this.checkCircle1E2V(cs, as, bs, b);
       }
     } else if (as instanceof PolygonEdge && bs instanceof Vertex && cs instanceof Vertex) {
       if (as.start === bs) {
@@ -173,16 +158,7 @@ export class Voronoi {
           this.emitCircle(bs.p.x + r * aa, bs.p.y + r * ab, r, b);
         }
       } else {
-        // general (E, V, V): perpendicular bisector of bs and cs as the line
-        const [aa,ab,,ad] = as.matRow;
-        const A = 2 * (cs.p.x - bs.p.x), B = 2 * (cs.p.y - bs.p.y);
-        const C = cs.p.x * cs.p.x + cs.p.y * cs.p.y - bs.p.x * bs.p.x - bs.p.y * bs.p.y;
-        const vx = -B, vy = A;
-        const x0 = Math.abs(A) > 1e-12 ? C / A : 0;
-        const y0 = Math.abs(A) > 1e-12 ? 0 : C / B;
-        const circles = circleCenterOnLine(x0,y0,vx,vy,bs.p.x,bs.p.y,aa*x0+ab*y0-ad, aa*vx+ab*vy).filter(([x,y,r]) => bs.inCone(x,y) && cs.inCone(x,y));
-        if (circles.length != 1) console.log ("(E,V,V) "+circles.length +" circle events");
-        circles.forEach(([x,y,r]) => this.emitCircle(x,y,r,b));
+        this.checkCircle1E2V(as,bs,cs,b);
       }
     } else if (as instanceof Vertex && bs instanceof Vertex && cs instanceof Vertex) {
         const area = (bs.p.x - as.p.x) * (cs.p.y - cs.p.y) - (bs.p.y - as.p.y) * (cs.p.x - as.p.x);
@@ -208,43 +184,23 @@ export class Voronoi {
 
   private handleCircleEvent(ce: CircleEvent<BeachSegment>): void {
     const a = ce.arc;
-    const vertex = ce.center;
-
-    if (a.prev?.rightEdge) {
-      a.prev.rightEdge.end = vertex;
-    }
-    if (a.rightEdge) {
-      a.rightEdge.end = vertex;
-    }
-
+    const c = ce.center;
 
     const left = a.prev!;
     const right = a.next!;
 
-    /*     if (!(right.site instanceof PolygonEdge) || !(left.site instanceof PolygonEdge)) {
-          console.log("not supported");
-          return;
-        }
-     */
-    left.next = right;
-    right.prev = left;
+    left.rightBorder!.end = c;
+    a.rightBorder!.end = c;
 
-    const e = new CellBorder(right.site, left.site, vertex);
-    this.borders.add(e);
+    a.remove();
 
-    left.rightEdge = e;
+    left.rightBorder = this.addNewCellBorder(right.site, left.site, c);
 
-    if (left.circleEvent) {
-      left.circleEvent.valid = false;
-      left.circleEvent = undefined;
-    }
-    if (right.circleEvent) {
-      right.circleEvent.valid = false;
-      right.circleEvent = undefined;
-    }
+    left.clearEvent();
+    right.clearEvent();
 
-    this.checkCircle(left.prev, left, right);
-    this.checkCircle(left, right, right.next);
+    this.checkCircle(left);
+    this.checkCircle(right);
   }
 
   step(): boolean {
@@ -274,11 +230,11 @@ export class Voronoi {
   }
 
   private initSection(v: Vertex): { head: BeachSegment, tail: BeachSegment } {
-    const a1 = new BeachSegment(v.nextEdge!, undefined,
-      new CellBorder(v.prevEdge!, v.nextEdge!, v.p));
-    const a2 = new BeachSegment(v.prevEdge!, a1);
+    const a1 = new BeachSegment(v.nextEdge!);
+    a1.rightBorder = this.addNewCellBorder(v.prevEdge!, v.nextEdge!, v.p);
+    const a2 = new BeachSegment(v.prevEdge!);
     a1.next = a2;
-    this.borders.add(a1.rightEdge!);
+    a2.prev = a1;
     return { head: a1, tail: a2 };
   }
 
@@ -296,33 +252,30 @@ export class Voronoi {
     if (hs && ts) {
       if (hs === ts) {
         console.log("Vertex event at both ends of the same beach section");
-        if (hs.head.rightEdge) hs.head.rightEdge.end = v.p;
+        if (hs.head.rightBorder) hs.head.rightBorder.end = v.p;
         this.beachSections.splice(this.beachSections.indexOf(hs), 1);
       } else {
         //Merge: ts.tail (nextEdge) meets hs.head (prevEdge) at v.p
         const oldTail = ts.tail;
         if (v.isConvex()) {
-          oldTail.rightEdge = new CellBorder(v.prevEdge!, v.nextEdge!, v.p);
-          this.borders.add(oldTail.rightEdge);
+          oldTail.rightBorder = this.addNewCellBorder(v.prevEdge!, v.nextEdge!, v.p);
           oldTail.next = hs.head;
           hs.head.prev = oldTail;
           ts.tail = hs.tail;
           this.beachSections.splice(this.beachSections.indexOf(hs), 1);
-          this.checkCircle(oldTail.prev, oldTail, hs.head);
-          this.checkCircle(oldTail, hs.head, hs.head.next);
+          this.checkCircle(oldTail);
+          this.checkCircle(hs.head);
         } else {
           const a = new BeachSegment(v);
-          oldTail.rightEdge = new CellBorder(v, v.nextEdge!, v.p);
-          a.rightEdge = new CellBorder(v.prevEdge!, v, v.p);
-          this.borders.add(oldTail.rightEdge);
-          this.borders.add(a.rightEdge);
+          oldTail.rightBorder = this.addNewCellBorder(v, v.nextEdge!, v.p);
+          a.rightBorder = this.addNewCellBorder(v.prevEdge!, v, v.p);
           oldTail.next = a; a.prev = oldTail;
           a.next = hs.head; hs.head.prev = a;
           ts.tail = hs.tail;
           this.beachSections.splice(this.beachSections.indexOf(hs), 1);
-          this.checkCircle(oldTail.prev, oldTail, a);
-          this.checkCircle(oldTail, a, hs.head);
-          this.checkCircle(a, hs.head, hs.head.next);
+          this.checkCircle(oldTail);
+          this.checkCircle(a);
+          this.checkCircle(hs.head);
         }
       }
       return;
@@ -334,20 +287,15 @@ export class Voronoi {
         a.next = hs.head;
         hs.head.prev = a;
         hs.head = a;
-        a.rightEdge = new CellBorder(v.prevEdge!, v.nextEdge!, v.p);
-        this.borders.add(a.rightEdge);
-        this.checkCircle(a, a.next, a.next.next);
+        a.rightBorder = this.addNewCellBorder(v.prevEdge!, v.nextEdge!, v.p);
+        this.checkCircle(a.next);
       } else {
-        const a = new BeachSegment(v.nextEdge!);
-        const b = new BeachSegment(v);
+        const a = new BeachSegment(v.nextEdge!, this.addNewCellBorder(v, v.nextEdge!, v.p));
+        const b = new BeachSegment(v          , this.addNewCellBorder(v.prevEdge!, v, v.p));
         a.next = b; b.prev = a;
         b.next = hs.head; hs.head.prev = b;
         hs.head = a;
-        a.rightEdge = new CellBorder(v, v.nextEdge!, v.p);
-        b.rightEdge = new CellBorder(v.prevEdge!, v, v.p);
-        this.borders.add(a.rightEdge);
-        this.borders.add(b.rightEdge);
-        this.checkCircle(b, b.next, b.next.next);
+        this.checkCircle(b.next);
       }
       return;
     }
@@ -357,25 +305,20 @@ export class Voronoi {
         const a = new BeachSegment(v.prevEdge!);
         a.prev = ts.tail;
         ts.tail.next = a;
-        ts.tail.rightEdge = new CellBorder(v.prevEdge!, v.nextEdge!, v.p);
-        this.borders.add(ts.tail.rightEdge);
+        ts.tail.rightBorder = this.addNewCellBorder(v.prevEdge!, v.nextEdge!, v.p);
         ts.tail = a;
-        this.checkCircle(a.prev.prev, a.prev, a);
+        this.checkCircle(a.prev);
       } else {
         const tail = ts.tail;
-        const a = new BeachSegment(v);
+        tail.rightBorder = this.addNewCellBorder(v, v.nextEdge!, v.p);
+        const a = new BeachSegment(v, this.addNewCellBorder(v.prevEdge!, v, v.p));
         const b = new BeachSegment(v.prevEdge!);
         tail.next = a;
         a.prev = tail;
         a.next = b;
         b.prev = a;
         ts.tail = b;
-        tail.rightEdge = new CellBorder(v, v.nextEdge!, v.p);
-        a.rightEdge = new CellBorder(v.prevEdge!, v, v.p);
-        this.borders.add(tail.rightEdge);
-        this.borders.add(a.rightEdge);
-        this.checkCircle(a.prev.prev, a.prev, a);
-        //this.checkCircle(a.prev, a, b);
+        this.checkCircle(a.prev);
       }
       return;
     }
@@ -397,31 +340,27 @@ export class Voronoi {
     if (arc && sec) {
       const prevSeg = arc.prev;
       if (v.isConvex()) {
-        const a = new BeachSegment(v.nextEdge!);
+        console.log("does this ever happen 1?");
+        const a = new BeachSegment(v.nextEdge!, this.addNewCellBorder(v.prevEdge!, v.nextEdge!, v.p));
         if (prevSeg) prevSeg.next = a; else sec.head = a;
         a.prev = prevSeg;
         a.next = arc;
         arc.prev = a;
-        a.rightEdge = new CellBorder(v.prevEdge!, v.nextEdge!, v.p);
-        this.borders.add(a.rightEdge);
-        this.checkCircle(prevSeg, a, arc);
-        this.checkCircle(a, arc, arc.next);
+        this.checkCircle(a);
+        this.checkCircle(arc);
       } else {
-        const a = new BeachSegment(v.nextEdge!);
-        const b = new BeachSegment(v);
+        console.log("does this ever happen 2?");
+        const a = new BeachSegment(v.nextEdge!, this.addNewCellBorder(v, v.nextEdge!, v.p));
+        const b = new BeachSegment(v          , this.addNewCellBorder(v.prevEdge!, v, v.p));
         if (prevSeg) prevSeg.next = a; else sec.head = a;
         a.prev = prevSeg;
         a.next = b;
         b.prev = a;
         b.next = arc;
         arc.prev = b;
-        a.rightEdge = new CellBorder(v, v.nextEdge!, v.p);
-        b.rightEdge = new CellBorder(v.prevEdge!, v, v.p);
-        this.borders.add(a.rightEdge);
-        this.borders.add(b.rightEdge);
-        this.checkCircle(prevSeg, a, b);
-        this.checkCircle(a, b, arc);
-        this.checkCircle(b, arc, arc.next);
+        this.checkCircle(a);
+        this.checkCircle(b);
+        this.checkCircle(arc);
       }
       return;
     }
@@ -436,16 +375,22 @@ export class Voronoi {
     // Right: [nextEdge, V_right?, arcAbove_copy, ...] (new head = nextEdge, arcAbove_copy inherits old next)
     const { arc: arcAbove, sec: aboveSec } = above;
     const oldNext = arcAbove.next;
-    const oldRightEdge = arcAbove.rightEdge;
+    const oldRightBorder = arcAbove.rightBorder;
     if (arcAbove.circleEvent) { arcAbove.circleEvent.valid = false; arcAbove.circleEvent = undefined; }
 
     //arcAbove_copy: same site, inherits old right connection
-    const arcCopy = new BeachSegment(arcAbove.site, undefined, oldRightEdge, oldNext);
+    const arcCopy = new BeachSegment(arcAbove.site, oldRightBorder);
+    arcCopy.next = oldNext;
     if (oldNext) oldNext.prev = arcCopy;
 
     if (v.isConvex()) {
+      console.log("I don't think this ever happens");
+      const [lx,ly] = beachSegmentIntersection(arcAbove.site, v.prevEdge!, v.p.y);
+      const [rx,ry] = beachSegmentIntersection(v.nextEdge!, arcCopy.site, v.p.y);
+
+      arcAbove.rightBorder = this.addNewCellBorder( v.prevEdge!,arcAbove.site, new Point(lx,ly));
       const prevSeg = new BeachSegment(v.prevEdge!);
-      const nextSeg = new BeachSegment(v.nextEdge!);
+      const nextSeg = new BeachSegment(v.nextEdge!, this.addNewCellBorder(arcCopy.site, v.nextEdge!, new Point(rx,ry)));
 
       //Left: arcAbove -> prevSeg
       arcAbove.next = prevSeg;
@@ -455,19 +400,12 @@ export class Voronoi {
       nextSeg.next = arcCopy;
       arcCopy.prev = nextSeg;
 
-      const [lx,ly] = beachSegmentIntersection(arcAbove.site, v.prevEdge!, v.p.y);
-      const [rx,ry] = beachSegmentIntersection(v.nextEdge!, arcCopy.site, v.p.y);
-      arcAbove.rightEdge = new CellBorder( v.prevEdge!,arcAbove.site, new Point(lx,ly));
-      nextSeg.rightEdge = new CellBorder(arcCopy.site, v.nextEdge!, new Point(rx,ry));
-      this.borders.add(arcAbove.rightEdge);
-      this.borders.add(nextSeg.rightEdge);
-
       const rightTail = arcAbove === aboveSec.tail ? arcCopy : aboveSec.tail;
       aboveSec.tail = prevSeg;
       this.beachSections.push({ head: nextSeg, tail: rightTail });
 
-      this.checkCircle(arcAbove.prev, arcAbove, prevSeg);
-      this.checkCircle(nextSeg, arcCopy, oldNext);
+      this.checkCircle(arcAbove);
+      this.checkCircle(arcCopy);
     } else {
       // Left: [..., arcAbove, vLeft, prevSeg]
       // Right: [nextSeg, vRigth, arcCopy, ...]
@@ -489,23 +427,19 @@ export class Voronoi {
       
       const [lx,ly] = beachSegmentIntersection(arcAbove.site, v, v.p.y);
       const [rx,ry] = beachSegmentIntersection(v, arcCopy.site, v.p.y);
-      arcAbove.rightEdge = new CellBorder(v, arcAbove.site, new Point(lx,ly));
-      vLeft.rightEdge = new CellBorder(v.prevEdge!, v, v.p);
-      nextSeg.rightEdge = new CellBorder(v, v.nextEdge!, v.p);
-      vRight.rightEdge = new CellBorder(arcAbove.site, v, new Point(rx,ry));
-      this.borders.add(arcAbove.rightEdge);
-      this.borders.add(vLeft.rightEdge);
-      this.borders.add(nextSeg.rightEdge);
-      this.borders.add(vRight.rightEdge);
+      arcAbove.rightBorder = this.addNewCellBorder(v, arcAbove.site, new Point(lx,ly));
+      vLeft.rightBorder = this.addNewCellBorder(v.prevEdge!, v, v.p);
+      nextSeg.rightBorder = this.addNewCellBorder(v, v.nextEdge!, v.p);
+      vRight.rightBorder = this.addNewCellBorder(arcAbove.site, v, new Point(rx,ry));
 
       const rightTail = arcAbove === aboveSec.tail ? arcCopy : aboveSec.tail;
       aboveSec.tail = prevSeg;
       this.beachSections.push({ head: nextSeg, tail: rightTail });
 
-      this.checkCircle(arcAbove.prev, arcAbove, vLeft);
-      this.checkCircle(arcAbove, vLeft, prevSeg);
-      this.checkCircle(nextSeg, vRight, arcCopy);
-      this.checkCircle(vRight, arcCopy, oldNext);
+      this.checkCircle(arcAbove);
+      this.checkCircle(vLeft);
+      this.checkCircle(vRight);
+      this.checkCircle(arcCopy);
     }
   }
 
