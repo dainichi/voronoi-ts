@@ -258,6 +258,7 @@ export class Voronoi {
         //Merge: ts.tail (nextEdge) meets hs.head (prevEdge) at v.p
         const oldTail = ts.tail;
         if (v.isConvex()) {
+          console.log("Does this ever happen?");
           oldTail.rightBorder = this.addNewCellBorder(v.prevEdge!, v.nextEdge!, v.p);
           oldTail.next = hs.head;
           hs.head.prev = oldTail;
@@ -266,7 +267,16 @@ export class Voronoi {
           this.checkCircle(oldTail);
           this.checkCircle(hs.head);
         } else {
-          console.log("Does this ever happen?");
+          const a = new BeachSegment(v);
+          oldTail.rightBorder = this.addNewCellBorder(v, v.nextEdge!, v.p);
+          a.rightBorder = this.addNewCellBorder(v.prevEdge!, v, v.p);
+          oldTail.next = a; a.prev = oldTail;
+          a.next = hs.head; hs.head.prev = a;
+          ts.tail = hs.tail;
+          this.beachSections.splice(this.beachSections.indexOf(hs), 1);
+          this.checkCircle(oldTail);
+          this.checkCircle(a);
+          this.checkCircle(hs.head);
         }
       }
       return;
