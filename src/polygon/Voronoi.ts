@@ -70,14 +70,18 @@ export class Voronoi {
         const vx = -B, vy = A;
         const x0 = Math.abs(A) > 1e-12 ? C / A : 0;
         const y0 = Math.abs(A) > 1e-12 ? 0 : C / B;
-        const [x, y, r] = circleCenterOnLine(x0,y0,vx,vy,as.p.x,as.p.y,a1*x0+b1*y0-c1,a1*vx+b1*vy);
-        this.emitCircle(x, y, r, b);
+        const circles = circleCenterOnLine(x0,y0,vx,vy,as.p.x,as.p.y,a1*x0+b1*y0-c1,a1*vx+b1*vy).filter(([x,y,r]) => as.inCone(x,y));
+        if (circles.length != 1) console.log ("(V,E,E) "+circles.length +" circle events");
+        circles.forEach(([x,y,r]) => this.emitCircle(x,y,r,b));
       }
     } else if (as instanceof PolygonEdge && bs instanceof Vertex && cs instanceof PolygonEdge) {
       if (as.start === bs && cs.end === bs) {
         //reflex vertex between its own edges: no circle event
       } else if (as.start === bs) {
         const [x, y, r] = circleCenterAtEdgeEnd(bs, as, cs);
+        this.emitCircle(x, y, r, b);
+      } else if (cs.end === bs) {
+        const [x,y,r] = circleCenterAtEdgeEnd(bs, cs, as);
         this.emitCircle(x, y, r, b);
       } else {
         // general (E,V,E) case: angle bisector of as and cs as the line
@@ -88,8 +92,9 @@ export class Voronoi {
         const vx = -B, vy = A;
         const x0 = Math.abs(A) > 1e-12 ? C / A : 0;
         const y0 = Math.abs(A) > 1e-12 ? 0 : C / B;
-        const [x, y, r] = circleCenterOnLine(x0,y0,vx,vy,bs.p.x,bs.p.y,a1*x0+b1*y0-c1,a1*vx+b1*vy);
-        this.emitCircle(x, y, r, b);
+        const circles = circleCenterOnLine(x0,y0,vx,vy,bs.p.x,bs.p.y,a1*x0+b1*y0-c1,a1*vx+b1*vy).filter(([x,y,r]) => bs.inCone(x,y));
+        if (circles.length != 1) console.log ("(E,V,E) "+circles.length +" circle events");
+        circles.forEach(([x,y,r]) => this.emitCircle(x,y,r,b));
       }
     } else if (as instanceof PolygonEdge && bs instanceof PolygonEdge && cs instanceof Vertex) {
       if (bs.start === cs) {
@@ -104,8 +109,9 @@ export class Voronoi {
         const vx = -B, vy = A;
         const x0 = Math.abs(A) > 1e-12 ? C / A : 0;
         const y0 = Math.abs(A) > 1e-12 ? 0 : C / B;
-        const [x, y, r] = circleCenterOnLine(x0,y0,vx,vy,cs.p.x,cs.p.y,a2*x0+b2*y0-c2,a2*vx+b2*vy);
-        this.emitCircle(x, y, r, b);
+        const circles = circleCenterOnLine(x0,y0,vx,vy,cs.p.x,cs.p.y,a2*x0+b2*y0-c2,a2*vx+b2*vy).filter(([x,y,r]) => cs.inCone(x,y));
+        if (circles.length != 1) console.log ("(E,E,V) "+circles.length +" circle events");
+        circles.forEach(([x,y,r]) => this.emitCircle(x,y,r,b));
       }
     } else if (as instanceof Vertex && bs instanceof PolygonEdge && cs instanceof Vertex) {
       if (bs.start === as || bs.end === as) {
@@ -132,18 +138,31 @@ export class Voronoi {
         const vx = -B, vy = A;
         const x0 = Math.abs(A) > 1e-12 ? C / A : 0;
         const y0 = Math.abs(A) > 1e-12 ? 0 : C / B;
-        const [x,y,r] = circleCenterOnLine(x0,y0,vx,vy,as.p.x,as.p.y,ba*x0+bb*y0-bd, ba*vx+bb*vy);
+        const circles = circleCenterOnLine(x0,y0,vx,vy,as.p.x,as.p.y,ba*x0+bb*y0-bd, ba*vx+bb*vy).filter(([x,y,r]) => as.inCone(x,y) && cs.inCone(x,y));
+        if (circles.length != 1) console.log ("(V,E,V) "+circles.length +" circle events");
+        circles.forEach(([x,y,r]) => this.emitCircle(x,y,r,b));
       }
     } else if (as instanceof Vertex && bs instanceof Vertex && cs instanceof PolygonEdge) {
-      //perpendicular bisector of as and bs as the line
-      const [ca,cb,,cd] = cs.matRow;
-      const A = 2 * (bs.p.x - as.p.x), B = 2 * (bs.p.y - as.p.y);
-      const C = bs.p.x * bs.p.x + bs.p.y * bs.p.y - as.p.x * as.p.x - as.p.y * as.p.y;
-      const vx = -B, vy = A;
-      const x0 = Math.abs(A) > 1e-12 ? C / A : 0;
-      const y0 = Math.abs(A) > 1e-12 ? 0 : C / B;
-      const [x,y,r] = circleCenterOnLine(x0,y0,vx,vy,bs.p.x,bs.p.y,ca*x0+cb*y0-cd, ca*vx+cb*vy);
-      this.emitCircle(x, y, r, b);
+      if (cs.end === bs) {
+        const [ca,cb] = cs.matRow;
+        const ax = as.p.x - bs.p.x, ay = as.p.y - bs.p.y;
+        const denom = 2 * (ax * ca + ay * cb);
+        if (Math.abs(denom) > 1e-12) {
+          const r = (ax * ax + ay * ay) / denom;
+          this.emitCircle(bs.p.x + r * ca, bs.p.y + r * cb, r, b);
+        }
+      } else {
+        //perpendicular bisector of as and bs as the line
+        const [ca,cb,,cd] = cs.matRow;
+        const A = 2 * (bs.p.x - as.p.x), B = 2 * (bs.p.y - as.p.y);
+        const C = bs.p.x * bs.p.x + bs.p.y * bs.p.y - as.p.x * as.p.x - as.p.y * as.p.y;
+        const vx = -B, vy = A;
+        const x0 = Math.abs(A) > 1e-12 ? C / A : 0;
+        const y0 = Math.abs(A) > 1e-12 ? 0 : C / B;
+        const circles = circleCenterOnLine(x0,y0,vx,vy,bs.p.x,bs.p.y,ca*x0+cb*y0-cd, ca*vx+cb*vy).filter(([x,y,r]) => as.inCone(x,y) && bs.inCone(x,y));
+        if (circles.length != 1) console.log ("(V,V,E) "+circles.length +" circle events");
+        circles.forEach(([x,y,r]) => this.emitCircle(x,y,r,b));
+      }
     } else if (as instanceof PolygonEdge && bs instanceof Vertex && cs instanceof Vertex) {
       if (as.start === bs) {
         const [aa,ab] = as.matRow;
@@ -161,8 +180,9 @@ export class Voronoi {
         const vx = -B, vy = A;
         const x0 = Math.abs(A) > 1e-12 ? C / A : 0;
         const y0 = Math.abs(A) > 1e-12 ? 0 : C / B;
-        const [x,y,r] = circleCenterOnLine(x0,y0,vx,vy,bs.p.x,bs.p.y,aa*x0+ab*y0-ad, aa*vx+ab*vy);
-        this.emitCircle(x, y, r, b);
+        const circles = circleCenterOnLine(x0,y0,vx,vy,bs.p.x,bs.p.y,aa*x0+ab*y0-ad, aa*vx+ab*vy).filter(([x,y,r]) => bs.inCone(x,y) && cs.inCone(x,y));
+        if (circles.length != 1) console.log ("(E,V,V) "+circles.length +" circle events");
+        circles.forEach(([x,y,r]) => this.emitCircle(x,y,r,b));
       }
     } else if (as instanceof Vertex && bs instanceof Vertex && cs instanceof Vertex) {
         const area = (bs.p.x - as.p.x) * (cs.p.y - cs.p.y) - (bs.p.y - as.p.y) * (cs.p.x - as.p.x);
@@ -253,20 +273,20 @@ export class Voronoi {
     while (this.step()) { }
   }
 
-  private initSection(v: Vertex): void {
+  private initSection(v: Vertex): { head: BeachSegment, tail: BeachSegment } {
     const a1 = new BeachSegment(v.nextEdge!, undefined,
       new CellBorder(v.prevEdge!, v.nextEdge!, v.p));
     const a2 = new BeachSegment(v.prevEdge!, a1);
     a1.next = a2;
     this.borders.add(a1.rightEdge!);
-    this.beachSections.push({ head: a1, tail: a2 });
+    return { head: a1, tail: a2 };
   }
 
   private handleVertexEvent(ev: VertexEvent): void {
     const v = ev.vertex;
 
     if (this.beachSections.length === 0) {
-      this.initSection(v);
+      this.beachSections.push(this.initSection(v));
       return;
     }
 
@@ -407,9 +427,8 @@ export class Voronoi {
     }
 
     //case 2: prevEdge not in beachline - pure site event if V.x is inside an existing section
-    const above = this.findArcAbove(v.p.x, v.p.y);
+    const above = this.findArcAboveOrAddSection(v);
     if (!above) {
-      this.initSection(v);
       return;
     }
     //split aboveSec into two sections at V.x:
@@ -490,14 +509,21 @@ export class Voronoi {
     }
   }
 
-  private findArcAbove(x: number, sweepY: number): {arc: BeachSegment, sec: {head: BeachSegment, tail: BeachSegment}} | null {
-    for (const sec of this.beachSections) {
+  private findArcAboveOrAddSection(v: Vertex): {arc: BeachSegment, sec: {head: BeachSegment, tail: BeachSegment}} | null {
+    const x = v.p.x;
+    const sweepY = v.p.y;
+    for (let i = 0; i < this.beachSections.length; i++) {
+      const sec = this.beachSections[i];
       let arc: BeachSegment = sec.head;
       if (arc.site instanceof Vertex ) throw Error("Start of beach lines should be Edge");
-      if (x < arc.site.start.p.x + (sweepY - arc.site.start.p.y)*(arc.site.end.p.x - arc.site.start.p.x)/(arc.site.end.p.y - arc.site.start.p.y)) return null;
+      if (x < arc.site.start.p.x + (sweepY - arc.site.start.p.y)*(arc.site.end.p.x - arc.site.start.p.x)/(arc.site.end.p.y - arc.site.start.p.y)) {
+            const newSec = this.initSection(v);
+            this.beachSections.splice(i, 0, newSec);
+            return null;
+      }
       while (arc) {
         if (!arc.next) {
-          if (arc.site instanceof Vertex ) throw Error("End of beech lines should be Edge");
+          if (arc.site instanceof Vertex ) throw Error("End of beach lines should be Edge");
           if (x < arc.site.start.p.x + (sweepY - arc.site.start.p.y)*(arc.site.end.p.x - arc.site.start.p.x)/(arc.site.end.p.y - arc.site.start.p.y)) return { arc, sec };
           break;
         }
@@ -506,6 +532,8 @@ export class Voronoi {
         arc = arc.next;
       }
     }
+    const newSec = this.initSection(v);
+    this.beachSections.push(newSec);
     return null;
   }
 }

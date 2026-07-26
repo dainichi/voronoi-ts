@@ -34,18 +34,22 @@ export function circleCenterOnLine(
     x0: number, y0: number, vx: number, vy: number,
     px: number, py: number,
     r0: number, rv: number,
-): [number, number, number] {
+): [number, number, number][] {
     const dx = x0 - px, dy = y0 - py;
     const qa = vx * vx + vy * vy - rv * rv;
     const qb = 2 * (dx * vx + dy * vy - r0 * rv);
     const qc = dx * dx + dy * dy - r0 * r0;
-    const sqrtDisc = Math.sqrt(Math.max(0, qb * qb - 4 * qa * qc));
+    const disc =  qb * qb - 4 * qa * qc;
+    if (disc < 0 ) return [];
+    const sqrtDisc = Math.sqrt(disc);
     const t1 = (-qb + sqrtDisc) / (2 * qa);
     const t2 = (-qb - sqrtDisc) / (2 * qa);
     const r1 = r0 + t1 * rv, r2 = r0 + t2 * rv;
-    // Prefer the inscribed circle (smallest positive r); fall back to t1 if r2 is non-positive.
-    const t = (r2 > 0 && (r1 <= 0 || r2 <= r1)) ? t2 : t1;
-    return [x0 + t * vx, y0 + t * vy, r0 + t * rv];
+
+    let res: [number,number,number][] = [];
+    if(r1 >=0) res.push([x0 + t1 * vx, y0 + t1 * vy, r1]);
+    if(r2 >=0) res.push([x0 + t2 * vx, y0 + t2 * vy, r2]);
+    return res;
 }
 
 export function circleCenterAtEdgeEnd(
