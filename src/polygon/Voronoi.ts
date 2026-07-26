@@ -266,16 +266,7 @@ export class Voronoi {
           this.checkCircle(oldTail);
           this.checkCircle(hs.head);
         } else {
-          const a = new BeachSegment(v);
-          oldTail.rightBorder = this.addNewCellBorder(v, v.nextEdge!, v.p);
-          a.rightBorder = this.addNewCellBorder(v.prevEdge!, v, v.p);
-          oldTail.next = a; a.prev = oldTail;
-          a.next = hs.head; hs.head.prev = a;
-          ts.tail = hs.tail;
-          this.beachSections.splice(this.beachSections.indexOf(hs), 1);
-          this.checkCircle(oldTail);
-          this.checkCircle(a);
-          this.checkCircle(hs.head);
+          console.log("Does this ever happen?");
         }
       }
       return;
@@ -323,48 +314,6 @@ export class Voronoi {
       return;
     }
 
-    // case 1: prev Edge is somewhere in the middle of an existing section
-    let arc: BeachSegment | undefined;
-    let sec: {head: BeachSegment, tail: BeachSegment} | undefined;
-    outer: for (const s of this.beachSections) {
-      let cur: BeachSegment | undefined = s.head;
-      while (cur) {
-        if (cur.site === v.prevEdge) {
-          arc = cur;
-          sec = s;
-          break outer;
-        }
-        cur = cur.next;
-      }
-    }
-    if (arc && sec) {
-      const prevSeg = arc.prev;
-      if (v.isConvex()) {
-        console.log("does this ever happen 1?");
-        const a = new BeachSegment(v.nextEdge!, this.addNewCellBorder(v.prevEdge!, v.nextEdge!, v.p));
-        if (prevSeg) prevSeg.next = a; else sec.head = a;
-        a.prev = prevSeg;
-        a.next = arc;
-        arc.prev = a;
-        this.checkCircle(a);
-        this.checkCircle(arc);
-      } else {
-        console.log("does this ever happen 2?");
-        const a = new BeachSegment(v.nextEdge!, this.addNewCellBorder(v, v.nextEdge!, v.p));
-        const b = new BeachSegment(v          , this.addNewCellBorder(v.prevEdge!, v, v.p));
-        if (prevSeg) prevSeg.next = a; else sec.head = a;
-        a.prev = prevSeg;
-        a.next = b;
-        b.prev = a;
-        b.next = arc;
-        arc.prev = b;
-        this.checkCircle(a);
-        this.checkCircle(b);
-        this.checkCircle(arc);
-      }
-      return;
-    }
-
     //case 2: prevEdge not in beachline - pure site event if V.x is inside an existing section
     const above = this.findArcAboveOrAddSection(v);
     if (!above) {
@@ -385,34 +334,18 @@ export class Voronoi {
 
     if (v.isConvex()) {
       console.log("I don't think this ever happens");
-      const [lx,ly] = beachSegmentIntersection(arcAbove.site, v.prevEdge!, v.p.y);
-      const [rx,ry] = beachSegmentIntersection(v.nextEdge!, arcCopy.site, v.p.y);
-
-      arcAbove.rightBorder = this.addNewCellBorder( v.prevEdge!,arcAbove.site, new Point(lx,ly));
-      const prevSeg = new BeachSegment(v.prevEdge!);
-      const nextSeg = new BeachSegment(v.nextEdge!, this.addNewCellBorder(arcCopy.site, v.nextEdge!, new Point(rx,ry)));
-
-      //Left: arcAbove -> prevSeg
-      arcAbove.next = prevSeg;
-      prevSeg.prev = arcAbove;
-
-      //Right: nextSeg -> arcCopy
-      nextSeg.next = arcCopy;
-      arcCopy.prev = nextSeg;
-
-      const rightTail = arcAbove === aboveSec.tail ? arcCopy : aboveSec.tail;
-      aboveSec.tail = prevSeg;
-      this.beachSections.push({ head: nextSeg, tail: rightTail });
-
-      this.checkCircle(arcAbove);
-      this.checkCircle(arcCopy);
     } else {
       // Left: [..., arcAbove, vLeft, prevSeg]
       // Right: [nextSeg, vRigth, arcCopy, ...]
-      const vLeft = new BeachSegment(v);
+      const [lx,ly] = beachSegmentIntersection(arcAbove.site, v, v.p.y);
+      const [rx,ry] = beachSegmentIntersection(v, arcCopy.site, v.p.y);
+
+      arcAbove.rightBorder = this.addNewCellBorder(v, arcAbove.site, new Point(lx,ly));
+
+      const vLeft = new BeachSegment(v            , this.addNewCellBorder(v.prevEdge!, v, v.p));
       const prevSeg = new BeachSegment(v.prevEdge!);
-      const nextSeg = new BeachSegment(v.nextEdge!);
-      const vRight = new BeachSegment(v);
+      const nextSeg = new BeachSegment(v.nextEdge!,this.addNewCellBorder(v, v.nextEdge!, v.p));
+      const vRight = new BeachSegment(v           ,this.addNewCellBorder(arcAbove.site, v, new Point(rx,ry)));
       
       //Left: arcAbove -> vLeft -> prevSeg
       arcAbove.next = vLeft;
@@ -425,13 +358,6 @@ export class Voronoi {
       vRight.next = arcCopy;
       arcCopy.prev = vRight;
       
-      const [lx,ly] = beachSegmentIntersection(arcAbove.site, v, v.p.y);
-      const [rx,ry] = beachSegmentIntersection(v, arcCopy.site, v.p.y);
-      arcAbove.rightBorder = this.addNewCellBorder(v, arcAbove.site, new Point(lx,ly));
-      vLeft.rightBorder = this.addNewCellBorder(v.prevEdge!, v, v.p);
-      nextSeg.rightBorder = this.addNewCellBorder(v, v.nextEdge!, v.p);
-      vRight.rightBorder = this.addNewCellBorder(arcAbove.site, v, new Point(rx,ry));
-
       const rightTail = arcAbove === aboveSec.tail ? arcCopy : aboveSec.tail;
       aboveSec.tail = prevSeg;
       this.beachSections.push({ head: nextSeg, tail: rightTail });
