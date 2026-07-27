@@ -13,7 +13,7 @@ import type { BeachSegment } from "./polygon/BeachSegment.js";
 import { CircleEvent } from "./sweep/CircleEvent.js";
 import { purgeStaleCircleEvents } from "./sweep/EventQueue.js";
 import { Voronoi, type VoronoiCenter } from "./polygon/Voronoi.js";
-import { PolygonEdge } from "./polygon/PolygonEdge.js";
+import { Edge } from "./polygon/Edge.js";
 import { Vertex } from "./polygon/Vertex.js";
 
 const SITES_KEY = "voronoi-ts-polygon-sites";
@@ -154,7 +154,7 @@ export class PolygonMode implements SiteMode {
 
         this.drawPolygon(ctx, viewport);
         this.drawProcessedCenters(ctx, viewport);
-        this.drawEdges(ctx, viewport);
+        this.drawBorders(ctx, viewport);
         if (isIntermediate) {
             drawSweepLine(ctx, viewport, canvas, sweepY);
             this.drawCircleEvents(ctx, viewport);
@@ -175,7 +175,7 @@ export class PolygonMode implements SiteMode {
         purgeStaleCircleEvents(this.voronoi.pq);
     }
 
-    private drawEdges(ctx: CanvasRenderingContext2D, viewport: Viewport): void {
+    private drawBorders(ctx: CanvasRenderingContext2D, viewport: Viewport): void {
         ctx.save();
         ctx.strokeStyle = "#666";
         ctx.lineWidth = 1.5;
@@ -193,9 +193,9 @@ export class PolygonMode implements SiteMode {
             }
 
             const {leftSite, rightSite} = border;
-            if (leftSite instanceof Vertex && rightSite instanceof PolygonEdge) {
+            if (leftSite instanceof Vertex && rightSite instanceof Edge) {
                 this.drawParabolaSegment(ctx, viewport, leftSite, rightSite, border.start, endPt);
-            } else if (leftSite instanceof PolygonEdge && rightSite instanceof Vertex) {
+            } else if (leftSite instanceof Edge && rightSite instanceof Vertex) {
                 this.drawParabolaSegment(ctx, viewport, rightSite, leftSite, border.start, endPt);
             } else {
                 drawLine(ctx, viewport, border.start, endPt);
@@ -208,7 +208,7 @@ export class PolygonMode implements SiteMode {
         ctx: CanvasRenderingContext2D,
         viewport: Viewport,
         vertex: Vertex,
-        edge: PolygonEdge,
+        edge: Edge,
         start: Point,
         end: Point
     ): void {
@@ -329,7 +329,7 @@ export class PolygonMode implements SiteMode {
     }
 
     private drawBeachSegment(ctx: CanvasRenderingContext2D, viewport: Viewport, arc: BeachSegment, sweepY: number, canvas: HTMLCanvasElement): void {
-        if (arc.site instanceof PolygonEdge ) {
+        if (arc.site instanceof Edge ) {
             const [x1, y1] = arc.prev
                 ? beachSegmentIntersection(arc.prev.site, arc.site, sweepY).slice(0, 2)
                 : [

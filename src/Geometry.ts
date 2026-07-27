@@ -1,5 +1,5 @@
 import { Point } from "./Point.js";
-import { PolygonEdge } from "./polygon/PolygonEdge.js";
+import { Edge } from "./polygon/Edge.js";
 import { Vertex } from "./polygon/Vertex.js";
 
 export function parabolaIntersection(
@@ -54,8 +54,8 @@ export function circleCenterOnLine(
 
 export function circleCenterAtEdgeEnd(
     vertex: Vertex,
-    edgeThroughVertex: PolygonEdge,
-    otherEdge: PolygonEdge,
+    edgeThroughVertex: Edge,
+    otherEdge: Edge,
 ): [number, number, number] {
   const [ea, eb] = edgeThroughVertex.matRow;
 const [fa, fb, , fd] = otherEdge.matRow;
@@ -65,27 +65,27 @@ return [vertex.p.x + r * ea, vertex.p.y + r * eb, r];
 }
 
 export function beachSegmentIntersection(
-    e1: PolygonEdge | Vertex,
-    e2: PolygonEdge | Vertex,
+    e1: Edge | Vertex,
+    e2: Edge | Vertex,
     sweepY: number,
 ): number[] {
-    if (e1 instanceof PolygonEdge && e2 instanceof PolygonEdge) {
+    if (e1 instanceof Edge && e2 instanceof Edge) {
         return solve3x3([e1.matRow, e2.matRow, [0, 1, -1, sweepY]]);
-    } else if (e1 instanceof PolygonEdge && e1.start === e2) {
+    } else if (e1 instanceof Edge && e1.start === e2) {
         let [a, b, c, d] = e1.matRow;
         const r = (e2.p.y - sweepY) / (1 - b);
         const x = e2.p.x + a * r;
         const y = e2.p.y + b * r;
         return [x, y, r];
-    } else if (e2 instanceof PolygonEdge && e2.end === e1) {
+    } else if (e2 instanceof Edge && e2.end === e1) {
         let [a, b, c, d] = e2.matRow;
         const r = (e1.p.y - sweepY) / (1 - b);
         const x = e1.p.x + a * r;
         const y = e1.p.y + b * r;
         return [x, y, r];
-    } else if (e1 instanceof Vertex && e2 instanceof PolygonEdge) {
+    } else if (e1 instanceof Vertex && e2 instanceof Edge) {
         return edgeVertexIntersection(e2, e1, sweepY, true);
-    } else if (e1 instanceof PolygonEdge && e2 instanceof Vertex) {
+    } else if (e1 instanceof Edge && e2 instanceof Vertex) {
         return edgeVertexIntersection(e1, e2, sweepY, false);
     } else if (e1 instanceof Vertex && e2 instanceof Vertex) {
         const x = parabolaIntersection(e1.p, e2.p, sweepY);
@@ -102,7 +102,7 @@ export function beachSegmentIntersection(
 // sign = (vx > 0) == vertexOnLeft selects the correct root
 
 function edgeVertexIntersection(
-    edge: PolygonEdge,
+    edge: Edge,
     vertex: Vertex,
     sweepY: number,
     vertexOnLeft: boolean

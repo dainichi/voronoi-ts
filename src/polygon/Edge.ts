@@ -1,7 +1,7 @@
 import { Point } from "../Point.js";
 import { Vertex } from "./Vertex.js";
 
-export class PolygonEdge {
+export class Edge {
 
     public readonly matRow: number[];
 

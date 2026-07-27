@@ -1,6 +1,6 @@
 import { CellBorder } from "./CellBorder.js";
 import { CircleEvent } from "../sweep/CircleEvent.js";
-import { PolygonEdge } from "./PolygonEdge.js";
+import { Edge } from "./Edge.js";
 import { Vertex } from "./Vertex.js";
 
 export class BeachSegment {
@@ -9,7 +9,7 @@ export class BeachSegment {
     next?: BeachSegment;
 
     constructor(
-        public readonly site: PolygonEdge | Vertex,
+        public readonly site: Edge | Vertex,
         public rightBorder?: CellBorder,
     ) {}
 

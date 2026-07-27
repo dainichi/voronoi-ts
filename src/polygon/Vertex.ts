@@ -1,9 +1,9 @@
 import { Point } from "../Point.js";
-import { PolygonEdge } from "./PolygonEdge.js";
+import { Edge } from "./Edge.js";
 
 export class Vertex {
-    public prevEdge?: PolygonEdge;
-    public nextEdge?: PolygonEdge;
+    public prevEdge?: Edge;
+    public nextEdge?: Edge;
     constructor(
         public readonly p: Point,
     ) {

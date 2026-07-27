@@ -1,11 +1,11 @@
 import { Point } from "../Point.js";
-import { PolygonEdge } from "./PolygonEdge.js";
+import { Edge } from "./Edge.js";
 import { Vertex } from "./Vertex.js";
 
 export class CellBorder {
     constructor(
-        public readonly leftSite: PolygonEdge | Vertex,
-        public readonly rightSite: PolygonEdge | Vertex,
+        public readonly leftSite: Edge | Vertex,
+        public readonly rightSite: Edge | Vertex,
         public readonly start: Point,
         public end?: Point
     ) {}
