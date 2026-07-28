@@ -405,13 +405,14 @@ export class Voronoi {
 
           assert(!v.isConvex(), "independent convex vertex on sweep line?");
 
-          
-          const newSec = {head: arcCopy, tail: aboveSec.tail}
+          const newSec = {head: arcCopy, tail: arcAbove === aboveSec.tail ? arcCopy : aboveSec.tail}
 
           aboveSec.tail = arcAbove;
 
-          const [lx, ly] = beachSegmentIntersection(arcAbove.site, v, v.p.y);
+          const idx = this.beachSections.indexOf(aboveSec);
+          this.beachSections.splice(idx + 1, 0, newSec);
 
+          const [lx, ly] = beachSegmentIntersection(arcAbove.site, v, v.p.y);
 
           this.addToEnd(aboveSec, v, new Point(lx, ly));
           this.addToEnd(aboveSec, v.prevEdge!, v.p);
@@ -419,8 +420,6 @@ export class Voronoi {
           this.addToFront(newSec, v, new Point(lx, ly));
           this.addToFront(newSec, v.nextEdge!, v.p);
 
-          const idx = this.beachSections.indexOf(aboveSec);
-          this.beachSections.splice(idx + 1, 0, newSec);
 
           this.checkCircle(arcAbove);
           this.checkCircle(arcAbove.next);
