@@ -181,7 +181,7 @@ export class PolygonMode implements SiteMode {
         ctx.lineWidth = 1.5;
         const sweepY = this.voronoi.sweepY;
         this.voronoi.borders.forEach((border) => {
-            if (!border.start) return;
+            //if (!border.start) return;
 
             let endPt: Point;
             if (border.end) {

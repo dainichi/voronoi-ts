@@ -96,18 +96,19 @@ export class Voronoi {
       vy = A;
     const x0 = Math.abs(A) > 1e-12 ? C / A : 0;
     const y0 = Math.abs(A) > 1e-12 ? 0 : C / B;
-    const circles = circleCenterOnLine(
-      x0,
-      y0,
-      vx,
-      vy,
-      bs.p.x,
-      bs.p.y,
-      aa * x0 + ab * y0 - ad,
-      aa * vx + ab * vy,
-    ).filter(([x, y, r]) => bs.inCone(x, y) && cs.inCone(x, y));
-    if (circles.length != 1)
-      console.log("1E2V " + circles.length + " circle events");
+    const circles = circleCenterOnLine(x0, y0, vx, vy, bs.p.x, bs.p.y, aa * x0 + ab * y0 - ad, aa * vx + ab * vy)
+      .filter(([x, y, r]) => bs.inCone(x, y) && cs.inCone(x, y));
+    if (circles.length === 0)
+      console.log("1E2V 0 circle events");
+    if (circles.length === 2) {
+      console.log("1E2V 2 circle events, picking highest circle bottom");
+      const [[, y1, r1], [, y2, r2]] = circles;
+      if (y1 - r1 < y2 - r2) {
+        circles.splice(0, 1);
+      } else {
+        circles.splice(1, 1);
+      }
+    }
     circles.forEach(([x, y, r]) => this.emitCircle(x, y, r, b));
   }
 
@@ -360,9 +361,10 @@ export class Voronoi {
           this.checkCircle(oldTail);
         }
       } else {
-        assert(!v.isConvex(), "independent convex vertex on sweep line?");
         const above = this.findArcAboveOrAddSection(v);
         if (above) {
+          assert(!v.isConvex(), "independent convex vertex on sweep line?");
+
           //split aboveSec into two sections at V.x:
           // Left: [..., arcAbove, V_left?, prevEdge] (arcAbove stays, new tail = prevEdge)
           // Right: [nextEdge, V_right?, arcAbove_copy, ...] (new head = nextEdge, arcAbove_copy inherits old next)
