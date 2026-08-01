@@ -48,9 +48,7 @@ export class Voronoi {
 
   private emitCircle(x: number, y: number, r: number, b: BeachSegment): void {
     if (r <= 0) {
-      console.log(
-        `skipping circle event with r=${r.toFixed(4)} at (${x.toFixed(3)}, ${y.toFixed(3)}) for ${b}`,
-      );
+      console.log(`skipping circle event with r=${r.toFixed(4)} at (${x.toFixed(3)}, ${y.toFixed(3)}) for ${b}`,);
       return;
     }
     const ce = new CircleEvent(new Point(x, y), r, b);
@@ -58,23 +56,13 @@ export class Voronoi {
     this.pq.push(ce);
   }
 
-  private addNewCellBorder(
-    left: Edge | Vertex,
-    right: Edge | Vertex,
-    start: Point,
-    end?: Point,
-  ) {
+  private addNewCellBorder(left: Edge | Vertex, right: Edge | Vertex, start: Point, end?: Point) {
     const a = new CellBorder(left, right, start, end);
     this.borders.add(a);
     return a;
   }
 
-  private checkCircle1V2E(
-    as: Vertex,
-    bs: Edge,
-    cs: Edge,
-    b: BeachSegment,
-  ): void {
+  private checkCircle1V2E(as: Vertex, bs: Edge, cs: Edge, b: BeachSegment): void {
     // angle bisector of bs and cs as the line
     const [a1, b1, , c1] = bs.matRow;
     const [a2, b2, , c2] = cs.matRow;
@@ -86,18 +74,9 @@ export class Voronoi {
       vy = A;
     const x0 = Math.abs(A) > 1e-12 ? C / A : 0;
     const y0 = Math.abs(A) > 1e-12 ? 0 : C / B;
-    const circles = circleCenterOnLine(
-      x0,
-      y0,
-      vx,
-      vy,
-      as.p.x,
-      as.p.y,
-      a1 * x0 + b1 * y0 - c1,
-      a1 * vx + b1 * vy,
-    ).filter(([x, y, r]) => as.inCone(x, y));
-    if (circles.length != 1)
-      console.log("1V2E " + circles.length + " circle events");
+    const circles = circleCenterOnLine(x0, y0, vx, vy, as.p.x, as.p.y, a1 * x0 + b1 * y0 - c1, a1 * vx + b1 * vy)
+      .filter(([x, y, r]) => as.inCone(x, y));
+    if (circles.length != 1) console.log("1V2E " + circles.length + " circle events");
     circles.forEach(([x, y, r]) => this.emitCircle(x, y, r, b));
   }
 
@@ -269,11 +248,11 @@ export class Voronoi {
     } else {
       console.log(
         "Circle event not supported for " +
-          as.toString() +
-          " " +
-          bs.toString() +
-          " " +
-          cs.toString(),
+        as.toString() +
+        " " +
+        bs.toString() +
+        " " +
+        cs.toString(),
       );
     }
   }
@@ -322,16 +301,13 @@ export class Voronoi {
   }
 
   compute(): void {
-    while (this.step()) {}
+    while (this.step()) { }
   }
 
   private initSection(v: Vertex): { head: BeachSegment; tail: BeachSegment } {
-    const a1 = new BeachSegment(v.nextEdge!);
-    a1.rightBorder = this.addNewCellBorder(v.prevEdge!, v.nextEdge!, v.p);
-    const a2 = new BeachSegment(v.prevEdge!);
-    a1.next = a2;
-    a2.prev = a1;
-    return { head: a1, tail: a2 };
+    const h = new BeachSegment(v.nextEdge), t = new BeachSegment(v.prevEdge);
+    this.connectWithBorder(h, v.p, t);
+    return { head: h, tail: t };
   }
 
   private handleVertexEvent(ev: VertexEvent): void {
@@ -349,44 +325,42 @@ export class Voronoi {
           this.beachSections.splice(this.beachSections.indexOf(hs), 1);
         } else {
           //Merge: ts.tail (nextEdge) meets hs.head (prevEdge) at v.p
-          const oldTail = ts.tail;
           assert(!v.isConvex(), "convex merge?");
           const a = new BeachSegment(v);
-          oldTail.rightBorder = this.addNewCellBorder(v, v.nextEdge!, v.p);
-          a.rightBorder = this.addNewCellBorder(v.prevEdge!, v, v.p);
-          oldTail.next = a;
-          a.prev = oldTail;
-          a.next = hs.head;
-          hs.head.prev = a;
+
+          this.connectWithBorder(ts.tail, v.p, a);
+          this.connectWithBorder(a, v.p, hs.head);
+
           ts.tail = hs.tail;
           this.beachSections.splice(this.beachSections.indexOf(hs), 1);
-          this.checkCircle(oldTail);
+          this.checkCircle(a.prev);
           this.checkCircle(a);
           this.checkCircle(hs.head);
         }
       } else if (hs) {
         if (v.isConvex()) {
           const oldHead = hs.head;
-          this.addToFront(hs, v.nextEdge!, v.p);
+          this.addToFront(hs, v.nextEdge, v.p);
           this.checkCircle(oldHead);
         } else {
           const oldHead = hs.head;
           this.addToFront(hs, v, v.p);
-          this.addToFront(hs, v.nextEdge!, v.p);
+          this.addToFront(hs, v.nextEdge, v.p);
           this.checkCircle(oldHead);
         }
       } else if (ts) {
         if (v.isConvex()) {
           const oldTail = ts.tail;
-          this.addToEnd(ts, v.prevEdge!, v.p);
+          this.addToEnd(ts, v.prevEdge, v.p);
           this.checkCircle(oldTail);
         } else {
           const oldTail = ts.tail;
           this.addToEnd(ts, v, v.p);
-          this.addToEnd(ts, v.prevEdge!, v.p);
+          this.addToEnd(ts, v.prevEdge, v.p);
           this.checkCircle(oldTail);
         }
       } else {
+        assert(!v.isConvex(), "independent convex vertex on sweep line?");
         const above = this.findArcAboveOrAddSection(v);
         if (above) {
           //split aboveSec into two sections at V.x:
@@ -403,9 +377,7 @@ export class Voronoi {
           arcCopy.next = oldNext;
           if (oldNext) oldNext.prev = arcCopy;
 
-          assert(!v.isConvex(), "independent convex vertex on sweep line?");
-
-          const newSec = {head: arcCopy, tail: arcAbove === aboveSec.tail ? arcCopy : aboveSec.tail}
+          const newSec = { head: arcCopy, tail: arcAbove === aboveSec.tail ? arcCopy : aboveSec.tail };
 
           aboveSec.tail = arcAbove;
 
@@ -415,11 +387,10 @@ export class Voronoi {
           const [lx, ly] = beachSegmentIntersection(arcAbove.site, v, v.p.y);
 
           this.addToEnd(aboveSec, v, new Point(lx, ly));
-          this.addToEnd(aboveSec, v.prevEdge!, v.p);
+          this.addToEnd(aboveSec, v.prevEdge, v.p);
 
           this.addToFront(newSec, v, new Point(lx, ly));
-          this.addToFront(newSec, v.nextEdge!, v.p);
-
+          this.addToFront(newSec, v.nextEdge, v.p);
 
           this.checkCircle(arcAbove);
           this.checkCircle(arcAbove.next);
@@ -430,30 +401,15 @@ export class Voronoi {
     }
   }
 
-  addToEnd(
-    ts: { head: BeachSegment; tail: BeachSegment },
-    beachSite: Edge | Vertex,
-    startPoint: Point,
-  ) {
+  addToEnd(ts: { head: BeachSegment; tail: BeachSegment }, beachSite: Edge | Vertex, startPoint: Point) {
     const bs = new BeachSegment(beachSite);
-    const border = this.addNewCellBorder(ts.tail.site, beachSite, startPoint);
-    ts.tail.rightBorder = border;
-    bs.prev = ts.tail;
-    ts.tail.next = bs;
+    this.connectWithBorder(ts.tail, startPoint, bs);
     ts.tail = bs;
   }
 
-  addToFront(
-    hs: { head: BeachSegment; tail: BeachSegment },
-    beachSite: Edge | Vertex,
-    startPoint: Point,
-  ): void {
-    const bs = new BeachSegment(
-      beachSite,
-      this.addNewCellBorder(hs.head.site, beachSite, startPoint),
-    );
-    bs.next = hs.head;
-    hs.head.prev = bs;
+  addToFront(hs: { head: BeachSegment; tail: BeachSegment }, beachSite: Edge | Vertex, startPoint: Point): void {
+    const bs = new BeachSegment(beachSite);
+    this.connectWithBorder(bs, startPoint, hs.head)
     hs.head = bs;
   }
 
@@ -466,14 +422,13 @@ export class Voronoi {
     for (let i = 0; i < this.beachSections.length; i++) {
       const sec = this.beachSections[i];
       let arc: BeachSegment = sec.head;
-      if (arc.site instanceof Vertex)
-        throw Error("Start of beach lines should be Edge");
+      assert(arc.site instanceof Edge, "Start of beach lines should be Edge");
       if (
         x <
         arc.site.start.p.x +
-          ((sweepY - arc.site.start.p.y) *
-            (arc.site.end.p.x - arc.site.start.p.x)) /
-            (arc.site.end.p.y - arc.site.start.p.y)
+        ((sweepY - arc.site.start.p.y) *
+          (arc.site.end.p.x - arc.site.start.p.x)) /
+        (arc.site.end.p.y - arc.site.start.p.y)
       ) {
         const newSec = this.initSection(v);
         this.beachSections.splice(i, 0, newSec);
@@ -481,14 +436,13 @@ export class Voronoi {
       }
       while (arc) {
         if (!arc.next) {
-          if (arc.site instanceof Vertex)
-            throw Error("End of beach lines should be Edge");
+          assert(arc.site instanceof Edge, "End of beach lines should be Edge");
           if (
             x <
             arc.site.start.p.x +
-              ((sweepY - arc.site.start.p.y) *
-                (arc.site.end.p.x - arc.site.start.p.x)) /
-                (arc.site.end.p.y - arc.site.start.p.y)
+            ((sweepY - arc.site.start.p.y) *
+              (arc.site.end.p.x - arc.site.start.p.x)) /
+            (arc.site.end.p.y - arc.site.start.p.y)
           )
             return { arc, sec };
           break;
@@ -502,4 +456,11 @@ export class Voronoi {
     this.beachSections.push(newSec);
     return null;
   }
+
+  connectWithBorder(a1: BeachSegment, p: Point, a2: BeachSegment) {
+    a1.rightBorder = this.addNewCellBorder(a2.site, a1.site, p);
+    a1.next = a2;
+    a2.prev = a1;
+  }
 }
+

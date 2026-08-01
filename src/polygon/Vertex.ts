@@ -2,8 +2,8 @@ import { Point } from "../Point.js";
 import { Edge } from "./Edge.js";
 
 export class Vertex {
-    public prevEdge?: Edge;
-    public nextEdge?: Edge;
+    public prevEdge!: Edge;
+    public nextEdge!: Edge;
     constructor(
         public readonly p: Point,
     ) {
@@ -11,7 +11,7 @@ export class Vertex {
 
     isConvex(): boolean {
         const {prevEdge, nextEdge} = this;
-        if (!prevEdge || !nextEdge) return true;
+        //if (!prevEdge || !nextEdge) return true;
         const dx1 = prevEdge.end.p.x - prevEdge.start.p.x;
         const dy1 = prevEdge.end.p.y - prevEdge.start.p.y;
         const dx2 = nextEdge.end.p.x - nextEdge.start.p.x;
