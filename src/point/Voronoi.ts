@@ -1,11 +1,12 @@
 import { Point } from "../Point.js";
-import { Edge } from "./Edge.js";
+import { Border } from "./Border.js";
 import { Arc } from "./Arc.js";
 import { SiteEvent } from "./SiteEvent.js";
 import { CircleEvent } from "../sweep/CircleEvent.js";
 import { EventQueue, purgeStaleCircleEvents } from "../sweep/EventQueue.js";
 import type { Event } from "./Event.js";
 import { parabolaIntersection } from "../Geometry.js";
+import { BorderEnd } from "./BorderEnd.js";
 
 export class Voronoi {
   private static readonly EPS = 1e-9;
@@ -14,7 +15,7 @@ export class Voronoi {
 
   beachRoot: Arc | null = null;
   centers = new Set<{ center: Point; radius: number }>();
-  edges = new Set<Edge>();
+  edges = new Set<Border>();
 
   sweepY = Infinity;
 
@@ -66,15 +67,12 @@ export class Voronoi {
     const a = ce.arc;
     const vertex = ce.center;
 
-    if (a.prev?.rightEdge) {
-      if (a.prev?.edgeOrientation) a.prev.rightEdge.end = vertex;
-      else a.prev.rightEdge.start = vertex;
-    }
+    if (a.prev?.borderEndOnRight) 
+      a.prev.borderEndOnRight.fix(vertex);
+    
 
-    if (a.rightEdge) {
-      if (a.edgeOrientation) a.rightEdge.end = vertex;
-      else a.rightEdge.start = vertex;
-    }
+    if (a.borderEndOnRight) 
+      a.borderEndOnRight.fix(vertex);
 
     const left = a.prev!;
     const right = a.next!;
@@ -82,12 +80,11 @@ export class Voronoi {
     left.next = right;
     right.prev = left;
 
-    const e = new Edge(right.site, left.site);
+    const e = new Border(right.site, left.site);
     e.start = vertex;
     this.edges.add(e);
 
-    left.rightEdge = e;
-    left.edgeOrientation = true;
+    left.borderEndOnRight = new BorderEnd(e, true);
 
     if (left.circleEvent) {
       left.circleEvent.valid = false;
@@ -148,36 +145,35 @@ export class Voronoi {
       return;
     }
 
-    const arc = this.findArcAbove(this.beachRoot, p);
+    const above = this.findArcAbove(this.beachRoot, p);
 
-    if (arc.circleEvent) {
-      arc.circleEvent.valid = false;
-      arc.circleEvent = undefined;
+    if (above.circleEvent) {
+      above.circleEvent.valid = false;
+      above.circleEvent = undefined;
     }
 
-    if (arc.site.y === p.y) {
-      const newArc = new Arc(p, arc, arc.next, arc.rightEdge, arc.edgeOrientation);
+    if (above.site.y === p.y) {
+      const newArc = new Arc(p, above, above.next, above.borderEndOnRight);
 
-      if (arc.next) arc.next.prev = newArc;
-      arc.next = newArc;
+      if (above.next) above.next.prev = newArc;
+      above.next = newArc;
 
-      const e = new Edge(p, arc.site);
+      const e = new Border(p, above.site);
       this.edges.add(e);
 
-      arc.rightEdge = e;
-      arc.edgeOrientation = true;
+      above.borderEndOnRight = new BorderEnd(e, true);
 
-      this.checkCircle(p.y, arc.prev, arc, newArc);
-      this.checkCircle(p.y, arc, newArc, newArc.next);
+      this.checkCircle(p.y, above.prev, above, newArc);
+      this.checkCircle(p.y, above, newArc, newArc.next);
       return;
     }
 
-    const e = new Edge(p, arc.site);
+    const e = new Border(p, above.site);
     this.edges.add(e);
 
-    const left = new Arc(arc.site, arc.prev, undefined, e, true);
-    const center = new Arc(p, left, undefined, e, false);
-    const right = new Arc(arc.site, center, arc.next, arc.rightEdge, arc.edgeOrientation);
+    const left = new Arc(above.site, above.prev, undefined, new BorderEnd (e,true));
+    const center = new Arc(p, left, undefined, new BorderEnd(e, false));
+    const right = new Arc(above.site, center, above.next, above.borderEndOnRight);
 
     if (left.prev) left.prev.next = left;
 
@@ -186,7 +182,7 @@ export class Voronoi {
 
     if (right.next) right.next.prev = right;
 
-    if (arc === this.beachRoot) this.beachRoot = left;
+    if (above === this.beachRoot) this.beachRoot = left;
 
     this.checkCircle(p.y, left.prev, left, center);
     this.checkCircle(p.y, center, right, right.next);

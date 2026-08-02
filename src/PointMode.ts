@@ -198,17 +198,17 @@ export class PointMode implements SiteMode {
                 return;
             }
 
-            if (edge.leftSite.y === edge.rightSite.y) {
-                const x = (edge.leftSite.x + edge.rightSite.x) / 2;
+            if (edge.siteA.y === edge.siteB.y) {
+                const x = (edge.siteA.x + edge.siteB.x) / 2;
                 const topY = edge.start?.y ?? bounds.maxY;
-                const botY = edge.end?.y ?? (finalState ? bounds.minY : parabolaY(edge.leftSite, sweepY, x));
+                const botY = edge.end?.y ?? (finalState ? bounds.minY : parabolaY(edge.siteA, sweepY, x));
                 drawLine(ctx, viewport, new Point(x, topY), new Point(x, botY));
                 return;
             }
 
             if (finalState) {
-                const A = edge.leftSite;
-                const B = edge.rightSite;
+                const A = edge.siteA;
+                const B = edge.siteB;
 
                 if (edge.start) {
                     const far = extendRayToBounds(edge.start, new Point(A.y - B.y, B.x - A.x), bounds);
@@ -228,17 +228,17 @@ export class PointMode implements SiteMode {
 
             const x1 = edge.start
                 ? edge.start.x
-                : parabolaIntersection(edge.leftSite, edge.rightSite, sweepY);
+                : parabolaIntersection(edge.siteA, edge.siteB, sweepY);
             const y1 = edge.start
                 ? edge.start.y
-                : parabolaY(edge.leftSite, sweepY, x1);
+                : parabolaY(edge.siteA, sweepY, x1);
 
             const x2 = edge.end
                 ? edge.end.x
-                : parabolaIntersection(edge.rightSite, edge.leftSite, sweepY);
+                : parabolaIntersection(edge.siteB, edge.siteA, sweepY);
             const y2 = edge.end
                 ? edge.end.y
-                : parabolaY(edge.leftSite, sweepY, x2);
+                : parabolaY(edge.siteA, sweepY, x2);
 
             drawLine(ctx, viewport, new Point(x1, y1), new Point(x2, y2));
         });

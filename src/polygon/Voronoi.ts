@@ -1,6 +1,6 @@
 import { Point } from "../Point.js";
 export type VoronoiCenter = { center: Point; radius: number };
-import { CellBorder } from "./CellBorder.js";
+import { Border } from "./Border.js";
 import { BeachSegment } from "./BeachSegment.js";
 import { Vertex } from "./Vertex.js";
 import { Edge } from "./Edge.js";
@@ -15,6 +15,7 @@ import {
   solve3x3,
 } from "../Geometry.js";
 import { assert } from "../utils.js";
+import { BorderEnd } from "./BorderEnd.js";
 
 export class Voronoi {
   private static readonly EPS = 1e-9;
@@ -24,7 +25,7 @@ export class Voronoi {
   beachSections: { head: BeachSegment; tail: BeachSegment }[] = [];
 
   centers = new Set<VoronoiCenter>();
-  borders = new Set<CellBorder>();
+  borders = new Set<Border>();
 
   sweepY = Infinity;
 
@@ -56,8 +57,9 @@ export class Voronoi {
     this.pq.push(ce);
   }
 
-  private addNewCellBorder(left: Edge | Vertex, right: Edge | Vertex, start: Point, end?: Point) {
-    const a = new CellBorder(left, right, start, end);
+  private addNewBorder(left: Edge | Vertex, right: Edge | Vertex, start?: Point): Border {
+    const a = new Border(left, right);
+    if (start) a.start = start;
     this.borders.add(a);
     return a;
   }
@@ -265,13 +267,14 @@ export class Voronoi {
     const left = a.prev!;
     const right = a.next!;
 
-    left.rightBorder!.end = c;
-    a.rightBorder!.end = c;
+    left.borderEndOnRight!.fix(c);
+    a.borderEndOnRight!.fix(c);
 
     a.remove();
 
-    left.rightBorder = this.addNewCellBorder(right.site, left.site, c);
-
+    const b = this.addNewBorder(right.site, left.site, c);
+    left.borderEndOnRight = new BorderEnd(b, true);
+    
     left.clearEvent();
     right.clearEvent();
 
@@ -307,7 +310,7 @@ export class Voronoi {
 
   private initSection(v: Vertex): { head: BeachSegment; tail: BeachSegment } {
     const h = new BeachSegment(v.nextEdge), t = new BeachSegment(v.prevEdge);
-    this.connectWithBorder(h, v.p, t);
+    this.connectWithBorder(h, t, v.p);
     return { head: h, tail: t };
   }
 
@@ -322,15 +325,15 @@ export class Voronoi {
       if (hs && ts) {
         if (hs === ts) {
           console.log("Vertex event at both ends of the same beach section");
-          if (hs.head.rightBorder) hs.head.rightBorder.end = v.p;
+          if (hs.head.borderEndOnRight) hs.head.borderEndOnRight.fix(v.p);
           this.beachSections.splice(this.beachSections.indexOf(hs), 1);
         } else {
           //Merge: ts.tail (nextEdge) meets hs.head (prevEdge) at v.p
           assert(!v.isConvex(), "convex merge?");
           const a = new BeachSegment(v);
 
-          this.connectWithBorder(ts.tail, v.p, a);
-          this.connectWithBorder(a, v.p, hs.head);
+          this.connectWithBorder(ts.tail, a, v.p);
+          this.connectWithBorder(a, hs.head, v.p);
 
           ts.tail = hs.tail;
           this.beachSections.splice(this.beachSections.indexOf(hs), 1);
@@ -370,7 +373,7 @@ export class Voronoi {
           // Right: [nextEdge, V_right?, arcAbove_copy, ...] (new head = nextEdge, arcAbove_copy inherits old next)
           const { arc: arcAbove, sec: aboveSec } = above;
           const oldNext = arcAbove.next;
-          const oldRightBorder = arcAbove.rightBorder;
+          const oldRightBorder = arcAbove.borderEndOnRight;
 
           arcAbove.clearEvent();
 
@@ -386,12 +389,12 @@ export class Voronoi {
           const idx = this.beachSections.indexOf(aboveSec);
           this.beachSections.splice(idx + 1, 0, newSec);
 
-          const [lx, ly] = beachSegmentIntersection(arcAbove.site, v, v.p.y);
+          //const [lx, ly] = beachSegmentIntersection(arcAbove.site, v, v.p.y);
 
-          this.addToEnd(aboveSec, v, new Point(lx, ly));
+          this.addToEnd(aboveSec, v);
           this.addToEnd(aboveSec, v.prevEdge, v.p);
 
-          this.addToFront(newSec, v, new Point(lx, ly));
+          this.addToFront(newSec, v);
           this.addToFront(newSec, v.nextEdge, v.p);
 
           this.checkCircle(arcAbove);
@@ -403,15 +406,15 @@ export class Voronoi {
     }
   }
 
-  addToEnd(ts: { head: BeachSegment; tail: BeachSegment }, beachSite: Edge | Vertex, startPoint: Point) {
+  addToEnd(ts: { head: BeachSegment; tail: BeachSegment }, beachSite: Edge | Vertex, startPoint?: Point) {
     const bs = new BeachSegment(beachSite);
-    this.connectWithBorder(ts.tail, startPoint, bs);
+    this.connectWithBorder(ts.tail, bs, startPoint);
     ts.tail = bs;
   }
 
-  addToFront(hs: { head: BeachSegment; tail: BeachSegment }, beachSite: Edge | Vertex, startPoint: Point): void {
+  addToFront(hs: { head: BeachSegment; tail: BeachSegment }, beachSite: Edge | Vertex, startPoint?: Point): void {
     const bs = new BeachSegment(beachSite);
-    this.connectWithBorder(bs, startPoint, hs.head)
+    this.connectWithBorder(bs, hs.head, startPoint)
     hs.head = bs;
   }
 
@@ -459,8 +462,10 @@ export class Voronoi {
     return null;
   }
 
-  connectWithBorder(a1: BeachSegment, p: Point, a2: BeachSegment) {
-    a1.rightBorder = this.addNewCellBorder(a2.site, a1.site, p);
+  connectWithBorder(a1: BeachSegment, a2: BeachSegment, p?: Point) {
+    const b = this.addNewBorder(a2.site, a1.site);
+
+    a1.borderEndOnRight = new BorderEnd(b, true);
     a1.next = a2;
     a2.prev = a1;
   }

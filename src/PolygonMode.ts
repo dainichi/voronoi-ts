@@ -15,6 +15,7 @@ import { purgeStaleCircleEvents } from "./sweep/EventQueue.js";
 import { Voronoi, type VoronoiCenter } from "./polygon/Voronoi.js";
 import { Edge } from "./polygon/Edge.js";
 import { Vertex } from "./polygon/Vertex.js";
+import { assert } from "./utils.js";
 
 const SITES_KEY = "voronoi-ts-polygon-sites";
 
@@ -183,22 +184,71 @@ export class PolygonMode implements SiteMode {
         this.voronoi.borders.forEach((border) => {
             //if (!border.start) return;
 
-            let endPt: Point;
-            if (border.end) {
-                endPt = border.end;
-            } else {
-                const arr = beachSegmentIntersection(border.rightSite, border.leftSite, sweepY);
+            const {siteA, siteB} = border;
+            
+            if (siteA instanceof Edge && siteB instanceof Edge) {
+                //assert(border.endpoints.length >= 1, "Edge-Edge border should have at least one endpoint");
+                let startPt: Point = border.start!;
+                let endPt: Point;
+                if (border.end) {
+                    endPt = border.end;
+                } else {
+                    const arr = beachSegmentIntersection(siteA, siteB, sweepY);
+                    if (arr.length < 2 || !Number.isFinite(arr[0])) return;
+                    endPt = new Point(arr[0], arr[1]);
+                }
+                
+                drawLine(ctx, viewport, startPt, endPt);
+            } else
+            if (siteA instanceof Vertex && siteB instanceof Edge) {
+                let startPt: Point
+                if (border.start) {
+                    startPt = border.start;
+                }else {
+                    const arr = beachSegmentIntersection(siteB, siteA, sweepY);
+                    if (arr.length < 2 || !Number.isFinite(arr[0])) return;
+                    startPt = new Point(arr[0], arr[1]);
+                }
+//                assert(border.endpoints.length >= 1, "Vertex-Edge border should have at least one endpoint");
+                let endPt: Point;
+                if (border.end) {
+                    endPt = border.end;
+                } else {
+                    const arr = beachSegmentIntersection(siteA, siteB, sweepY);
+                    if (arr.length < 2 || !Number.isFinite(arr[0])) return;
+                    endPt = new Point(arr[0], arr[1]);
+                }
+                
+                this.drawParabolaSegment(ctx, viewport, siteA, siteB, startPt, endPt);
+            } else
+            if (siteA instanceof Edge && siteB instanceof Vertex) {
+                let startPt: Point
+                if (border.start) {
+                    startPt = border.start;
+                }else {
+                    const arr = beachSegmentIntersection(siteB, siteA, sweepY);
+                    if (arr.length < 2 || !Number.isFinite(arr[0])) return;
+                    startPt = new Point(arr[0], arr[1]);
+                }
+                //assert(border.endpoints.length >= 1, "Edge-Vertex border should have at least one endpoint");
+                let endPt: Point;
+                if (border.end) {
+                    endPt = border.end;
+                } else {
+                    const arr = beachSegmentIntersection(siteA, siteB, sweepY);
+                    if (arr.length < 2 || !Number.isFinite(arr[0])) return;
+                    endPt = new Point(arr[0], arr[1]);
+                }
+                
+                this.drawParabolaSegment(ctx, viewport, siteB, siteA, startPt, endPt);
+            } else{
+                let arr = beachSegmentIntersection(border.siteA, border.siteB, sweepY);
                 if (arr.length < 2 || !Number.isFinite(arr[0])) return;
-                endPt = new Point(arr[0], arr[1]);
-            }
-
-            const {leftSite, rightSite} = border;
-            if (leftSite instanceof Vertex && rightSite instanceof Edge) {
-                this.drawParabolaSegment(ctx, viewport, leftSite, rightSite, border.start, endPt);
-            } else if (leftSite instanceof Edge && rightSite instanceof Vertex) {
-                this.drawParabolaSegment(ctx, viewport, rightSite, leftSite, border.start, endPt);
-            } else {
-                drawLine(ctx, viewport, border.start, endPt);
+                const endPt = new Point(arr[0], arr[1]);
+                arr = beachSegmentIntersection(border.siteB, border.siteA, sweepY);
+                if (arr.length < 2 || !Number.isFinite(arr[0])) return;
+                const startPt = new Point(arr[0], arr[1]);
+                drawLine(ctx, viewport, startPt, endPt);
             }
         });
         ctx.restore();

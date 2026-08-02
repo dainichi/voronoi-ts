@@ -17,6 +17,6 @@ describe("Polygon Voronoi", () => {
         expect(voronoi.borders.size).toEqual(3);
 
         const edges = Array.from(voronoi.borders);
-        expect(edges.some((edge) => edge.start !== null || edge.end !== null)).toBe(true);
+        expect(edges.some((edge) => edge.start || edge.end)).toBe(true);
     });
 });
