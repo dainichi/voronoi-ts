@@ -38,7 +38,7 @@ export function purgeStaleCircleEvents<E extends SweepEvent>(queue: EventQueue<E
     while (queue.length > 0) {
         const next = queue.peek();
         if (!(next instanceof CircleEvent)) break;
-        if (next.valid && next.arc.circleEvent === next) break;
+        if (next.valid && next.beachSegment.circleEvent === next) break;
         queue.shift();
     }
 }

@@ -8,7 +8,7 @@ export class CircleEvent<A> {
     constructor(
         public readonly center: Point,
         public readonly radius: number,
-        public readonly arc: A,
+        public readonly beachSegment: A,
     ) {
         this.x = center.x;
         this.y = center.y - radius;

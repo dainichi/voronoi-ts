@@ -265,7 +265,7 @@ export class Voronoi {
   }
 
   private handleCircleEvent(ce: CircleEvent<BeachSegment>): void {
-    const a = ce.arc;
+    const a = ce.beachSegment;
     const c = ce.center;
 
     const left = a.prev!;

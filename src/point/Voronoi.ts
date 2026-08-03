@@ -29,12 +29,12 @@ export class Voronoi {
     }
   }
 
-  private checkCircle(sweepY: number, a?: BeachSegment, b?: BeachSegment, c?: BeachSegment): void {
-    if (!a || !b || !c) return;
-
-    const A = a.site,
+  private checkCircle(b?: BeachSegment): void {
+    if (!b || !b.prev || !b.next) return;
+    
+    const A = b.prev.site,
       B = b.site,
-      C = c.site;
+      C = b.next.site;
 
     const area = (B.x - A.x) * (C.y - A.y) - (B.y - A.y) * (C.x - A.x);
 
@@ -59,7 +59,7 @@ export class Voronoi {
     const center = new Point(ux, uy);
     const r = Math.hypot(center.x - A.x, center.y - A.y);
 
-    if (center.y - r > sweepY + Voronoi.EPS) return;
+    //if (center.y - r > sweepY + Voronoi.EPS) return;
 
     const ce = new CircleEvent(center, r, b);
     b.circleEvent = ce;
@@ -68,15 +68,11 @@ export class Voronoi {
   }
 
   private handleCircleEvent(ce: CircleEvent<BeachSegment>): void {
-    const a = ce.arc;
+    const a = ce.beachSegment;
     const vertex = ce.center;
 
-    if (a.prev?.borderEndOnRight) 
-      a.prev.borderEndOnRight.fix(vertex);
-    
-
-    if (a.borderEndOnRight) 
-      a.borderEndOnRight.fix(vertex);
+    a.prev!.borderEndOnRight!.fix(vertex);
+    a.borderEndOnRight!.fix(vertex);
 
     const left = a.prev!;
     const right = a.next!;
@@ -99,8 +95,8 @@ export class Voronoi {
       right.circleEvent = undefined;
     }
 
-    this.checkCircle(ce.y, left.prev, left, right);
-    this.checkCircle(ce.y, left, right, right.next);
+    this.checkCircle(left);
+    this.checkCircle(right);
   }
 
   step(): boolean {
@@ -167,8 +163,8 @@ export class Voronoi {
 
       above.borderEndOnRight = new BorderEnd(e, true);
 
-      this.checkCircle(p.y, above.prev, above, newArc);
-      this.checkCircle(p.y, above, newArc, newArc.next);
+      this.checkCircle(above);
+      this.checkCircle(newArc);
       return;
     }
 
@@ -188,7 +184,7 @@ export class Voronoi {
 
     if (above === this.beachRoot) this.beachRoot = left;
 
-    this.checkCircle(p.y, left.prev, left, center);
-    this.checkCircle(p.y, center, right, right.next);
+    this.checkCircle(left);
+    this.checkCircle(right);
   }
 }
