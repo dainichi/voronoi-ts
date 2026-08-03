@@ -68,7 +68,7 @@ export function beachSegmentIntersection(
     e1: Edge | Vertex,
     e2: Edge | Vertex,
     sweepY: number,
-): number[] {
+): [number,number,number] {
     if (e1 instanceof Edge && e2 instanceof Edge) {
         return solve3x3([e1.matRow, e2.matRow, [0, 1, -1, sweepY]]);
     } else if (e1 instanceof Edge && e1.start === e2) {
@@ -92,8 +92,7 @@ export function beachSegmentIntersection(
         const y = parabolaY(e1.p, sweepY, x);
         return [x, y, y - sweepY];
     } else {
-        console.log("Cannot calculate intersection for " + e1.toString() + e2.toString());
-        return [];
+        throw new Error("Invalid arguments for beachSegmentIntersection");
     }
 }
 
@@ -106,7 +105,7 @@ function edgeVertexIntersection(
     vertex: Vertex,
     sweepY: number,
     vertexOnLeft: boolean
-): number[] {
+): [number,number,number] {
     const [a, b, , c] = edge.matRow;
     const vx = 1 - b, vy = a;
     const x0 = Math.abs(a) > 1e-12 ? (c - sweepY) / a : 0;

@@ -94,7 +94,7 @@ export class PolygonMode implements SiteMode {
     runAlgorithmToEnd(): void {
         if (this.algorithmComplete) return;
         this.lastCircle = null;
-        while (this.voronoi.step()) {}
+        while (this.voronoi.step()) { }
         this.algorithmComplete = true;
     }
 
@@ -133,12 +133,12 @@ export class PolygonMode implements SiteMode {
         for (const vc of this.voronoi.centers) {
             const s = viewport.worldToScreen(vc.center);
             if (Math.hypot(s.x - screenX, s.y - screenY) < threshold) {
-                if(this.hoveredCenter === vc) return false;
+                if (this.hoveredCenter === vc) return false;
                 this.hoveredCenter = vc;
                 return true;
             }
         }
-        if (this.hoveredCenter === null) return false;{
+        if (this.hoveredCenter === null) return false; {
             this.hoveredCenter = null;
             return true;
         }
@@ -182,72 +182,31 @@ export class PolygonMode implements SiteMode {
         ctx.lineWidth = 1.5;
         const sweepY = this.voronoi.sweepY;
         this.voronoi.borders.forEach((border) => {
-            //if (!border.start) return;
+            const { siteA, siteB } = border;
 
-            const {siteA, siteB} = border;
-            
-            if (siteA instanceof Edge && siteB instanceof Edge) {
-                //assert(border.endpoints.length >= 1, "Edge-Edge border should have at least one endpoint");
-                let startPt: Point = border.start!;
-                let endPt: Point;
-                if (border.end) {
-                    endPt = border.end;
-                } else {
-                    const arr = beachSegmentIntersection(siteA, siteB, sweepY);
-                    if (arr.length < 2 || !Number.isFinite(arr[0])) return;
-                    endPt = new Point(arr[0], arr[1]);
-                }
-                
-                drawLine(ctx, viewport, startPt, endPt);
-            } else
+            let startPt: Point
+            if (border.start) {
+                startPt = border.start;
+            } else {
+                const arr = beachSegmentIntersection(siteA, siteB, sweepY);
+                if (arr.length < 2 || !Number.isFinite(arr[0])) return;
+                startPt = new Point(arr[0], arr[1]);
+            }
+
+            let endPt: Point;
+            if (border.end) {
+                endPt = border.end;
+            } else {
+                const arr = beachSegmentIntersection(siteB, siteA, sweepY);
+                if (arr.length < 2 || !Number.isFinite(arr[0])) return;
+                endPt = new Point(arr[0], arr[1]);
+            }
+
             if (siteA instanceof Vertex && siteB instanceof Edge) {
-                let startPt: Point
-                if (border.start) {
-                    startPt = border.start;
-                }else {
-                    const arr = beachSegmentIntersection(siteB, siteA, sweepY);
-                    if (arr.length < 2 || !Number.isFinite(arr[0])) return;
-                    startPt = new Point(arr[0], arr[1]);
-                }
-//                assert(border.endpoints.length >= 1, "Vertex-Edge border should have at least one endpoint");
-                let endPt: Point;
-                if (border.end) {
-                    endPt = border.end;
-                } else {
-                    const arr = beachSegmentIntersection(siteA, siteB, sweepY);
-                    if (arr.length < 2 || !Number.isFinite(arr[0])) return;
-                    endPt = new Point(arr[0], arr[1]);
-                }
-                
                 this.drawParabolaSegment(ctx, viewport, siteA, siteB, startPt, endPt);
-            } else
-            if (siteA instanceof Edge && siteB instanceof Vertex) {
-                let startPt: Point
-                if (border.start) {
-                    startPt = border.start;
-                }else {
-                    const arr = beachSegmentIntersection(siteB, siteA, sweepY);
-                    if (arr.length < 2 || !Number.isFinite(arr[0])) return;
-                    startPt = new Point(arr[0], arr[1]);
-                }
-                //assert(border.endpoints.length >= 1, "Edge-Vertex border should have at least one endpoint");
-                let endPt: Point;
-                if (border.end) {
-                    endPt = border.end;
-                } else {
-                    const arr = beachSegmentIntersection(siteA, siteB, sweepY);
-                    if (arr.length < 2 || !Number.isFinite(arr[0])) return;
-                    endPt = new Point(arr[0], arr[1]);
-                }
-                
+            } else if (siteA instanceof Edge && siteB instanceof Vertex) {
                 this.drawParabolaSegment(ctx, viewport, siteB, siteA, startPt, endPt);
-            } else{
-                let arr = beachSegmentIntersection(border.siteA, border.siteB, sweepY);
-                if (arr.length < 2 || !Number.isFinite(arr[0])) return;
-                const endPt = new Point(arr[0], arr[1]);
-                arr = beachSegmentIntersection(border.siteB, border.siteA, sweepY);
-                if (arr.length < 2 || !Number.isFinite(arr[0])) return;
-                const startPt = new Point(arr[0], arr[1]);
+            } else {
                 drawLine(ctx, viewport, startPt, endPt);
             }
         });
@@ -262,18 +221,18 @@ export class PolygonMode implements SiteMode {
         start: Point,
         end: Point
     ): void {
-        const [a, b,, d] = edge.matRow;
+        const [a, b, , d] = edge.matRow;
         const p = (a * vertex.p.x + b * vertex.p.y - d) / 2;
         if (Math.abs(p) < 1e-12) { drawLine(ctx, viewport, start, end); return; }
 
         const Vx = vertex.p.x - p * a, Vy = vertex.p.y - p * b;
         const uStart = -b * (start.x - Vx) + a * (start.y - Vy);
-        const uEnd   = -b * (end.x   - Vx) + a * (end.y   - Vy);
+        const uEnd = -b * (end.x - Vx) + a * (end.y - Vy);
 
         // Arc-length estimate via midpoint for sample count
         const uMid = (uStart + uEnd) / 2, vMid = uMid * uMid / (4 * p);
         const msx = viewport.worldToScreenX(Vx + uMid * (-b) + vMid * a);
-        const msy = viewport.worldToScreenY(Vy + uMid *  a   + vMid * b);
+        const msy = viewport.worldToScreenY(Vy + uMid * a + vMid * b);
         const ssx = viewport.worldToScreenX(start.x), ssy = viewport.worldToScreenY(start.y);
         const sex = viewport.worldToScreenX(end.x), sey = viewport.worldToScreenY(end.y);
         const N = Math.min(5000, Math.max(2, Math.ceil(
@@ -285,7 +244,7 @@ export class PolygonMode implements SiteMode {
             const u = uStart + (uEnd - uStart) * i / N;
             const v = u * u / (4 * p);
             const scx = viewport.worldToScreenX(Vx + u * (-b) + v * a);
-            const scy = viewport.worldToScreenY(Vy + u *  a   + v * b);
+            const scy = viewport.worldToScreenY(Vy + u * a + v * b);
             if (i === 0) ctx.moveTo(scx, scy); else ctx.lineTo(scx, scy);
         }
         ctx.stroke();
@@ -379,7 +338,7 @@ export class PolygonMode implements SiteMode {
     }
 
     private drawBeachSegment(ctx: CanvasRenderingContext2D, viewport: Viewport, arc: BeachSegment, sweepY: number, canvas: HTMLCanvasElement): void {
-        if (arc.site instanceof Edge ) {
+        if (arc.site instanceof Edge) {
             const [x1, y1] = arc.prev
                 ? beachSegmentIntersection(arc.prev.site, arc.site, sweepY).slice(0, 2)
                 : [
@@ -402,19 +361,19 @@ export class PolygonMode implements SiteMode {
             let leftX = viewport.screenToWorldX(0);
             let rightX = viewport.screenToWorldX(canvas.getBoundingClientRect().width);
             if (arc.prev) {
-                const [x,,] = beachSegmentIntersection(arc.prev.site, arc.site, sweepY);
+                const [x, ,] = beachSegmentIntersection(arc.prev.site, arc.site, sweepY);
                 if (Number.isFinite(x)) leftX = x;
             }
             if (arc.next) {
-                const [x,,] = beachSegmentIntersection(arc.site, arc.next.site, sweepY);
+                const [x, ,] = beachSegmentIntersection(arc.site, arc.next.site, sweepY);
                 if (Number.isFinite(x)) rightX = x;
             }
             if (rightX <= leftX) return;
-    
+
             const samples = Math.min(Math.max(2, Math.floor(Math.abs(viewport.worldToScreenX(rightX) - viewport.worldToScreenX(leftX)))), 5000);
             const dx = (rightX - leftX) / samples;
             let started = false;
-    
+
             ctx.beginPath();
             for (let i = 0; i <= samples; i++) {
                 const x = leftX + dx * i;
@@ -436,5 +395,5 @@ export class PolygonMode implements SiteMode {
         }
     }
 
-    
+
 }

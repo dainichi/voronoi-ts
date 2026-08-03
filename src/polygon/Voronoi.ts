@@ -274,7 +274,7 @@ export class Voronoi {
 
     const b = this.addNewBorder(right.site, left.site, c);
     left.borderEndOnRight = new BorderEnd(b, true);
-    
+
     left.clearEvent();
     right.clearEvent();
 
@@ -391,11 +391,27 @@ export class Voronoi {
 
           //const [lx, ly] = beachSegmentIntersection(arcAbove.site, v, v.p.y);
 
-          this.addToEnd(aboveSec, v);
+          const b = new Border(arcAbove.site, v);
+          this.borders.add(b);
+          const lbe = new BorderEnd(b, false);
+          const rbe = new BorderEnd(b, true);
+
+          const bs = new BeachSegment(v);
+          aboveSec.tail.next = bs;
+          bs.prev = aboveSec.tail;
+          aboveSec.tail = bs;
+
           this.addToEnd(aboveSec, v.prevEdge, v.p);
 
-          this.addToFront(newSec, v);
+          const bs2 = new BeachSegment(v);
+          newSec.head.prev = bs2;
+          bs2.next = newSec.head;
+          newSec.head = bs2;
+
           this.addToFront(newSec, v.nextEdge, v.p);
+
+          arcAbove.borderEndOnRight = lbe;
+          arcCopy.prev!.borderEndOnRight = rbe;
 
           this.checkCircle(arcAbove);
           this.checkCircle(arcAbove.next);
@@ -464,7 +480,7 @@ export class Voronoi {
 
   connectWithBorder(a1: BeachSegment, a2: BeachSegment, p?: Point) {
     const b = this.addNewBorder(a2.site, a1.site);
-
+    if (p) b.start = p;
     a1.borderEndOnRight = new BorderEnd(b, true);
     a1.next = a2;
     a2.prev = a1;
