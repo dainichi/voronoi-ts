@@ -316,121 +316,81 @@ export class Voronoi {
 
   private handleVertexEvent(ev: VertexEvent): void {
     const v = ev.vertex;
-    if (this.beachSections.length === 0) {
-      this.beachSections.push(this.initSection(v));
-    } else {
-      const hs = this.beachSections.find((s) => s.head.site === v.prevEdge);
-      const ts = this.beachSections.find((s) => s.tail.site === v.nextEdge);
+    const hs = this.beachSections.find((s) => s.head.site === v.prevEdge);
+    const ts = this.beachSections.find((s) => s.tail.site === v.nextEdge);
 
-      if (hs && ts) {
-        if (hs === ts) {
-          console.log("Vertex event at both ends of the same beach section");
-          if (hs.head.borderEndOnRight) hs.head.borderEndOnRight.fix(v.p);
-          this.beachSections.splice(this.beachSections.indexOf(hs), 1);
-        } else {
-          //Merge: ts.tail (nextEdge) meets hs.head (prevEdge) at v.p
-          assert(!v.isConvex(), "convex merge?");
-          const a = new BeachSegment(v);
-
-          this.connectWithBorder(ts.tail, a, v.p);
-          this.connectWithBorder(a, hs.head, v.p);
-
-          ts.tail = hs.tail;
-          this.beachSections.splice(this.beachSections.indexOf(hs), 1);
-          this.checkCircle(a.prev);
-          this.checkCircle(a);
-          this.checkCircle(hs.head);
-        }
-      } else if (hs) {
-        if (v.isConvex()) {
-          const oldHead = hs.head;
-          this.addToFront(hs, v.nextEdge, v.p);
-          this.checkCircle(oldHead);
-        } else {
-          const oldHead = hs.head;
-          this.addToFront(hs, v, v.p);
-          this.addToFront(hs, v.nextEdge, v.p);
-          this.checkCircle(oldHead);
-        }
-      } else if (ts) {
-        if (v.isConvex()) {
-          const oldTail = ts.tail;
-          this.addToEnd(ts, v.prevEdge, v.p);
-          this.checkCircle(oldTail);
-        } else {
-          const oldTail = ts.tail;
-          this.addToEnd(ts, v, v.p);
-          this.addToEnd(ts, v.prevEdge, v.p);
-          this.checkCircle(oldTail);
-        }
+    if (hs && ts) {
+      if (hs === ts) {
+        hs.head.borderEndOnRight!.fix(v.p);
+        this.beachSections.splice(this.beachSections.indexOf(hs), 1);
       } else {
-        const above = this.findArcAboveOrAddSection(v);
-        if (above) {
-          assert(!v.isConvex(), "independent convex vertex on sweep line?");
+        //Merge: ts.tail (nextEdge) meets hs.head (prevEdge) at v.p
+        assert(!v.isConvex(), "convex merge?");
+        const a = new BeachSegment(v);
 
-          //split aboveSec into two sections at V.x:
-          // Left: [..., arcAbove, V_left?, prevEdge] (arcAbove stays, new tail = prevEdge)
-          // Right: [nextEdge, V_right?, arcAbove_copy, ...] (new head = nextEdge, arcAbove_copy inherits old next)
-          const { arc: arcAbove, sec: aboveSec } = above;
-          const oldNext = arcAbove.next;
-          const oldRightBorder = arcAbove.borderEndOnRight;
+        this.connectWithBorder(ts.tail, a, v.p);
+        this.connectWithBorder(a, hs.head, v.p);
 
-          arcAbove.clearEvent();
+        ts.tail = hs.tail;
+        this.beachSections.splice(this.beachSections.indexOf(hs), 1);
+        this.checkCircle(a.prev);
+        this.checkCircle(a);
+        this.checkCircle(hs.head);
+      }
+    } else if (hs) {
+      const oldHead = hs.head;
+      if (!v.isConvex()) this.addToFront(hs, v, v.p);
+      this.addToFront(hs, v.nextEdge, v.p);
+      this.checkCircle(oldHead);
+    } else if (ts) {
+      const oldTail = ts.tail;
+      if (!v.isConvex()) this.addToEnd(ts, v, v.p);
+      this.addToEnd(ts, v.prevEdge, v.p);
+      this.checkCircle(oldTail);
+    } else {
+      const above = this.findArcAboveOrAddSection(v);
+      if (above) {
+        assert(!v.isConvex(), "independent convex vertex on sweep line?");
 
-          //arcAbove_copy: same site, inherits old right connection
-          const arcCopy = new BeachSegment(arcAbove.site, oldRightBorder);
-          arcCopy.next = oldNext;
-          if (oldNext) oldNext.prev = arcCopy;
+        const { arc: arcAbove, sec: aboveSec } = above;
 
-          const newSec = { head: arcCopy, tail: arcAbove === aboveSec.tail ? arcCopy : aboveSec.tail };
+        arcAbove.clearEvent();
 
-          aboveSec.tail = arcAbove;
+        const arcCopy = new BeachSegment(arcAbove.site, arcAbove.borderEndOnRight);
+        if (arcAbove.next) arcAbove.next.prev = arcCopy;
+        arcCopy.next = arcAbove.next;
 
-          const idx = this.beachSections.indexOf(aboveSec);
-          this.beachSections.splice(idx + 1, 0, newSec);
+        const newSec = { head: arcCopy, tail: arcAbove === aboveSec.tail ? arcCopy : aboveSec.tail };
 
-          //const [lx, ly] = beachSegmentIntersection(arcAbove.site, v, v.p.y);
+        aboveSec.tail = arcAbove;
 
-          const b = new Border(arcAbove.site, v);
-          this.borders.add(b);
-          const lbe = new BorderEnd(b, false);
-          const rbe = new BorderEnd(b, true);
+        this.beachSections.splice(this.beachSections.indexOf(aboveSec) + 1, 0, newSec);
 
-          const bs = new BeachSegment(v);
-          aboveSec.tail.next = bs;
-          bs.prev = aboveSec.tail;
-          aboveSec.tail = bs;
+        const b = this.addNewBorder(arcAbove.site, v);
 
-          this.addToEnd(aboveSec, v.prevEdge, v.p);
+        this.addToEnd(aboveSec, v, new BorderEnd(b, false));
+        this.addToEnd(aboveSec, v.prevEdge, v.p);
 
-          const bs2 = new BeachSegment(v);
-          newSec.head.prev = bs2;
-          bs2.next = newSec.head;
-          newSec.head = bs2;
+        this.addToFront(newSec, v, new BorderEnd(b, true));
+        this.addToFront(newSec, v.nextEdge, v.p);
 
-          this.addToFront(newSec, v.nextEdge, v.p);
-
-          arcAbove.borderEndOnRight = lbe;
-          arcCopy.prev!.borderEndOnRight = rbe;
-
-          this.checkCircle(arcAbove);
-          this.checkCircle(arcAbove.next);
-          this.checkCircle(arcCopy.prev);
-          this.checkCircle(arcCopy);
-        }
+        this.checkCircle(arcAbove);
+        this.checkCircle(arcAbove.next);
+        this.checkCircle(arcCopy.prev);
+        this.checkCircle(arcCopy);
       }
     }
   }
 
-  addToEnd(ts: { head: BeachSegment; tail: BeachSegment }, beachSite: Edge | Vertex, startPoint?: Point) {
+  addToEnd(ts: { head: BeachSegment; tail: BeachSegment }, beachSite: Edge | Vertex, startPointOrBorderEnd: Point | BorderEnd) {
     const bs = new BeachSegment(beachSite);
-    this.connectWithBorder(ts.tail, bs, startPoint);
+    this.connectWithBorder(ts.tail, bs, startPointOrBorderEnd);
     ts.tail = bs;
   }
 
-  addToFront(hs: { head: BeachSegment; tail: BeachSegment }, beachSite: Edge | Vertex, startPoint?: Point): void {
+  addToFront(hs: { head: BeachSegment; tail: BeachSegment }, beachSite: Edge | Vertex, startPointOrBorderEnd: Point | BorderEnd): void {
     const bs = new BeachSegment(beachSite);
-    this.connectWithBorder(bs, hs.head, startPoint)
+    this.connectWithBorder(bs, hs.head, startPointOrBorderEnd);
     hs.head = bs;
   }
 
@@ -478,10 +438,10 @@ export class Voronoi {
     return null;
   }
 
-  connectWithBorder(a1: BeachSegment, a2: BeachSegment, p?: Point) {
-    const b = this.addNewBorder(a2.site, a1.site);
-    if (p) b.start = p;
-    a1.borderEndOnRight = new BorderEnd(b, true);
+  connectWithBorder(a1: BeachSegment, a2: BeachSegment, startPointOrBorderEnd: Point | BorderEnd) {
+    a1.borderEndOnRight = startPointOrBorderEnd instanceof BorderEnd ?
+      startPointOrBorderEnd :
+      new BorderEnd(this.addNewBorder(a2.site, a1.site, startPointOrBorderEnd), true);
     a1.next = a2;
     a2.prev = a1;
   }
