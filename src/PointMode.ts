@@ -10,7 +10,7 @@ import {
     type Bounds,
     type Viewport
 } from "./Viewport.js";
-import type { Arc } from "./point/Arc.js";
+import type { BeachSegment } from "./point/BeachSegment.js";
 import { CircleEvent } from "./sweep/CircleEvent.js";
 import { purgeStaleCircleEvents } from "./sweep/EventQueue.js";
 import { Voronoi } from "./point/Voronoi.js";
@@ -278,7 +278,7 @@ export class PointMode implements SiteMode {
         ctx.save();
         ctx.strokeStyle = "#4a90e2";
         ctx.lineWidth = 1;
-        let arc: Arc | undefined = this.voronoi.beachRoot;
+        let arc: BeachSegment | undefined = this.voronoi.beachRoot;
         while (arc) {
             const ce = arc.circleEvent;
             if (ce && ce.valid) {
@@ -299,7 +299,7 @@ export class PointMode implements SiteMode {
         ctx.lineWidth = 1.2;
         ctx.setLineDash([6, 4]);
 
-        let arc: Arc | undefined = this.voronoi.beachRoot;
+        let arc: BeachSegment | undefined = this.voronoi.beachRoot;
         while (arc) {
             this.drawBeachArc(ctx, viewport, canvas, arc, sweepY);
             arc = arc.next;
@@ -308,7 +308,7 @@ export class PointMode implements SiteMode {
         ctx.restore();
     }
 
-    private drawBeachArc(ctx: CanvasRenderingContext2D, viewport: Viewport, canvas: HTMLCanvasElement, arc: Arc, sweepY: number): void {
+    private drawBeachArc(ctx: CanvasRenderingContext2D, viewport: Viewport, canvas: HTMLCanvasElement, arc: BeachSegment, sweepY: number): void {
         if (arc.site.y === sweepY) {
             this.drawDegenerateArc(ctx, viewport, arc, sweepY);
             return;
@@ -350,7 +350,7 @@ export class PointMode implements SiteMode {
         ctx.stroke();
     }
 
-    private drawDegenerateArc(ctx: CanvasRenderingContext2D, viewport: Viewport, arc: Arc, sweepY: number): void {
+    private drawDegenerateArc(ctx: CanvasRenderingContext2D, viewport: Viewport, arc: BeachSegment, sweepY: number): void {
         const siteX = arc.site.x;
 
         const above = (arc.prev && arc.prev.site.y !== sweepY) ? arc.prev

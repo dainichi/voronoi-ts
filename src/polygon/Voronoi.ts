@@ -1,6 +1,6 @@
 import { Point } from "../Point.js";
 export type VoronoiCenter = { center: Point; radius: number };
-import { Border } from "./Border.js";
+import { Border as GenericBorder} from "../Border.js";
 import { BeachSegment } from "./BeachSegment.js";
 import { Vertex } from "./Vertex.js";
 import { Edge } from "./Edge.js";
@@ -15,8 +15,12 @@ import {
   solve3x3,
 } from "../Geometry.js";
 import { assert } from "../utils.js";
-import { BorderEnd } from "./BorderEnd.js";
+import { BorderEnd as GenericBorderEnd } from "../BorderEnd.js";
 
+type Border = GenericBorder<Edge | Vertex>;
+type BorderEnd = GenericBorderEnd<Edge | Vertex>;
+const Border = GenericBorder;
+const BorderEnd = GenericBorderEnd;
 export class Voronoi {
   private static readonly EPS = 1e-9;
 

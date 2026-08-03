@@ -1,9 +1,9 @@
-import { Point } from "../Point.js";
+import { Point } from "./Point.js";
 import { Border } from "./Border.js";
 
-export class BorderEnd {
+export class BorderEnd<T> {
     constructor(
-        public readonly border: Border,
+        public readonly border: Border<T>,
         public readonly traceWithSiteAOnLeft: boolean
     ) {}
 

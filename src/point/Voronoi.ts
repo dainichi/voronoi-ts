@@ -1,19 +1,23 @@
 import { Point } from "../Point.js";
-import { Border } from "./Border.js";
-import { Arc } from "./Arc.js";
+import { Border as GenericBorder } from "../Border.js";
+import { BeachSegment } from "./BeachSegment.js";
 import { SiteEvent } from "./SiteEvent.js";
 import { CircleEvent } from "../sweep/CircleEvent.js";
 import { EventQueue, purgeStaleCircleEvents } from "../sweep/EventQueue.js";
 import type { Event } from "./Event.js";
 import { parabolaIntersection } from "../Geometry.js";
-import { BorderEnd } from "./BorderEnd.js";
+import { BorderEnd as GenericBorderEnd} from "../BorderEnd.js";
 
+type Border = GenericBorder<Point>;
+type BorderEnd = GenericBorderEnd<Point>;
+const Border = GenericBorder;
+const BorderEnd = GenericBorderEnd;
 export class Voronoi {
   private static readonly EPS = 1e-9;
 
   readonly pq = new EventQueue<Event>();
 
-  beachRoot: Arc | null = null;
+  beachRoot: BeachSegment | null = null;
   centers = new Set<{ center: Point; radius: number }>();
   edges = new Set<Border>();
 
@@ -25,7 +29,7 @@ export class Voronoi {
     }
   }
 
-  private checkCircle(sweepY: number, a?: Arc, b?: Arc, c?: Arc): void {
+  private checkCircle(sweepY: number, a?: BeachSegment, b?: BeachSegment, c?: BeachSegment): void {
     if (!a || !b || !c) return;
 
     const A = a.site,
@@ -63,7 +67,7 @@ export class Voronoi {
     this.pq.push(ce);
   }
 
-  private handleCircleEvent(ce: CircleEvent<Arc>): void {
+  private handleCircleEvent(ce: CircleEvent<BeachSegment>): void {
     const a = ce.arc;
     const vertex = ce.center;
 
@@ -125,8 +129,8 @@ export class Voronoi {
     while (this.step()) {}
   }
 
-  private findArcAbove(head: Arc, p: Point): Arc {
-    let a: Arc = head;
+  private findArcAbove(head: BeachSegment, p: Point): BeachSegment {
+    let a: BeachSegment = head;
 
     while (a.next) {
       if (p.x < parabolaIntersection(a.site, a.next.site, p.y)) {
@@ -141,7 +145,7 @@ export class Voronoi {
     const p = ev.site;
 
     if (!this.beachRoot) {
-      this.beachRoot = new Arc(p);
+      this.beachRoot = new BeachSegment(p);
       return;
     }
 
@@ -153,7 +157,7 @@ export class Voronoi {
     }
 
     if (above.site.y === p.y) {
-      const newArc = new Arc(p, above, above.next, above.borderEndOnRight);
+      const newArc = new BeachSegment(p, above, above.next, above.borderEndOnRight);
 
       if (above.next) above.next.prev = newArc;
       above.next = newArc;
@@ -171,9 +175,9 @@ export class Voronoi {
     const e = new Border(p, above.site);
     this.edges.add(e);
 
-    const left = new Arc(above.site, above.prev, undefined, new BorderEnd (e,true));
-    const center = new Arc(p, left, undefined, new BorderEnd(e, false));
-    const right = new Arc(above.site, center, above.next, above.borderEndOnRight);
+    const left = new BeachSegment(above.site, above.prev, undefined, new BorderEnd (e,true));
+    const center = new BeachSegment(p, left, undefined, new BorderEnd(e, false));
+    const right = new BeachSegment(above.site, center, above.next, above.borderEndOnRight);
 
     if (left.prev) left.prev.next = left;
 

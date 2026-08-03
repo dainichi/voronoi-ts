@@ -1,7 +1,7 @@
 import { CircleEvent } from "../sweep/CircleEvent.js";
 import { Edge } from "./Edge.js";
 import { Vertex } from "./Vertex.js";
-import { BorderEnd } from "./BorderEnd.js";
+import { BorderEnd } from "../BorderEnd.js";
 
 export class BeachSegment {
     circleEvent?: CircleEvent<BeachSegment>;
@@ -10,7 +10,7 @@ export class BeachSegment {
 
     constructor(
         public readonly site: Edge | Vertex,
-        public borderEndOnRight?: BorderEnd,
+        public borderEndOnRight?: BorderEnd<Edge | Vertex>,
     ) {}
 
     toString(): string {
