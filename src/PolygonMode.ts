@@ -1,5 +1,5 @@
 import { beachSegmentIntersection, parabolaIntersection, parabolaY } from "./Geometry.js";
-import { Point } from "./Point.js";
+import { dot, Point } from "./Point.js";
 import type { SiteMode } from "./SiteMode.js";
 import {
     boundsForPoints,
@@ -25,7 +25,7 @@ export class PolygonMode implements SiteMode {
     readonly footer = "Vertices are shown in world coordinates. The polygon is interpreted as one convex polygon for now.";
     readonly inputPlaceholder = "x,y or x y";
 
-    sites = [{x: 2, y: 4}, {x: 0, y: 0}, {x: 4, y: 0}];
+    sites = [{ x: 2, y: 4 }, { x: 0, y: 0 }, { x: 4, y: 0 }];
     selectedIndex = -1;
     algorithmComplete = false;
     hoveredCenter: VoronoiCenter | null = null;
@@ -41,7 +41,7 @@ export class PolygonMode implements SiteMode {
         try {
             const data = JSON.parse(stored) as { x: number; y: number }[];
             if (Array.isArray(data)) {
-                this.sites = data.map((d) => ({x: d.x, y: d.y} as Point));
+                this.sites = data.map((d) => ({ x: d.x, y: d.y } as Point));
             }
         } catch {
             // Ignore JSON parse errors.
@@ -54,7 +54,7 @@ export class PolygonMode implements SiteMode {
 
     resetAlgorithm(): void {
         this.saveSites();
-        this.voronoi = new Voronoi(this.sites.map((s) => ({x: s.x, y: s.y} as Point)));
+        this.voronoi = new Voronoi(this.sites.map((s) => ({ x: s.x, y: s.y } as Point)));
         this.algorithmComplete = false;
         this.lastCircle = null;
         this.hoveredCenter = null;
@@ -220,8 +220,8 @@ export class PolygonMode implements SiteMode {
         start: Point,
         end: Point
     ): void {
-        const [a, b, , d] = edge.matRow;
-        const p = (a * vertex.p.x + b * vertex.p.y - d) / 2;
+        const { x: a, y: b } = edge.normal;
+        const p = (dot(edge.normal, vertex.p) - edge.offset) / 2;
         if (Math.abs(p) < 1e-12) { drawLine(ctx, viewport, start, end); return; }
 
         const Vx = vertex.p.x - p * a, Vy = vertex.p.y - p * b;
@@ -340,10 +340,10 @@ export class PolygonMode implements SiteMode {
         if (arc.site instanceof Edge) {
             const p1 = arc.prev
                 ? beachSegmentIntersection(arc.prev.site, arc.site, sweepY).center
-                : {x: arc.site.start.p.x + (arc.site.end.p.x - arc.site.start.p.x) * (sweepY - arc.site.start.p.y) / (arc.site.end.p.y - arc.site.start.p.y), y: sweepY};
+                : { x: arc.site.start.p.x + (arc.site.end.p.x - arc.site.start.p.x) * (sweepY - arc.site.start.p.y) / (arc.site.end.p.y - arc.site.start.p.y), y: sweepY };
             const p2 = arc.next
                 ? beachSegmentIntersection(arc.site, arc.next.site, sweepY).center
-                : {x: arc.site.start.p.x + (arc.site.end.p.x - arc.site.start.p.x) * (sweepY - arc.site.start.p.y) / (arc.site.end.p.y - arc.site.start.p.y), y: sweepY};
+                : { x: arc.site.start.p.x + (arc.site.end.p.x - arc.site.start.p.x) * (sweepY - arc.site.start.p.y) / (arc.site.end.p.y - arc.site.start.p.y), y: sweepY };
 
             ctx.beginPath();
             ctx.moveTo(viewport.worldToScreenX(p1.x), viewport.worldToScreenY(p1.y));

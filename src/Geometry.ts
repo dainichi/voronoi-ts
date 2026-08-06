@@ -56,35 +56,53 @@ export function circleCenterOnLine(
     l0: Point, v: Vec2,
     p: Point,
     r0: number, rv: number,
-): Circle[] {
+): Circle | undefined {
     const d = sub(l0, p);
     const qa = dot(v, v) - rv * rv;
     const qb = 2 * (dot(d, v) - r0 * rv);
     const qc = dot(d, d) - r0 * r0;
     const disc = qb * qb - 4 * qa * qc;
-    if (disc < 0) return [];
+    if (disc < 0) {
+        console.log("negative discriminant"); 
+        return undefined;
+    }
     const sqrtDisc = Math.sqrt(disc);
-    const t1 = (-qb + sqrtDisc) / (2 * qa);
-    const t2 = (-qb - sqrtDisc) / (2 * qa);
-    const r1 = r0 + t1 * rv, r2 = r0 + t2 * rv;
+    const t = (-qb - sqrtDisc) / (2 * qa);
+    const r = r0 + t * rv;
 
-    let res: Circle[] = [];
-    //if (r1 >= 0) res.push({ center: add(l0, scale(v, t1)), radius: r1 });
-    if (r2 >= 0) res.push({ center: add(l0, scale(v, t2)), radius: r2 });
-    return res;
+    if (r<0) {
+        console.log("negative radius");
+        return undefined;
+    }
+    return { center: add(l0, scale(v, t)), radius: r };
 }
 
-export function circleCenterAtEdgeEnd(
+export function edgeEndAndEdge(
     vertex: Vertex,
     edgeThroughVertex: Edge,
     otherEdge: Edge,
 ): Circle {
-    const [ea, eb] = edgeThroughVertex.matRow;
-    const [fa, fb, , fd] = otherEdge.matRow;
-
-    const r = (fd - vertex.p.x * fa - vertex.p.y * fb) / (ea * fa + eb * fb - 1);
-    return { center: { x: vertex.p.x + r * ea, y: vertex.p.y + r * eb }, radius: r };
+    const ev_n = edgeThroughVertex.normal;
+    const oe_n = otherEdge.normal;
+    const r = (otherEdge.offset - dot(vertex.p, oe_n)) / (dot(ev_n, oe_n) - 1); 
+    return { center: add(vertex.p, scale(ev_n, r)), radius: r };
 }
+
+export function edgeEndAndVertex(
+    vertex: Vertex,
+    edgeThroughVertex: Edge,
+    otherVertex: Vertex,
+): Circle {
+    const ev_n = edgeThroughVertex.normal;
+    const c = sub(otherVertex.p, vertex.p);
+    const denom = 2 * dot(c, ev_n);
+    if (Math.abs(denom) < 1e-12) {
+        throw new Error("Denominator too small in edgeEndAndVertex");
+    }
+    const r = dot(c, c) / denom;
+    return { center: add(vertex.p, scale(ev_n, r)), radius: r };
+}
+
 
 export function beachSegmentIntersection(e1: Edge | Vertex, e2: Edge | Vertex, sweepY: number,): Circle {
     if (e1 instanceof Edge && e2 instanceof Edge) {

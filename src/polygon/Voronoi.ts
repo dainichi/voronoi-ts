@@ -1,4 +1,4 @@
-import { dot, perp, Point, scale, sub } from "../Point.js";
+import { add, dot, perp, Point, scale, sub } from "../Point.js";
 import { Border as GenericBorder } from "../Border.js";
 import { BeachSegment as GenericBeachSegment } from "../BeachSegment.js";
 import { Vertex } from "./Vertex.js";
@@ -8,11 +8,12 @@ import { CircleEvent } from "../sweep/CircleEvent.js";
 import { EventQueue, purgeStaleCircleEvents } from "../sweep/EventQueue.js";
 import {
   beachSegmentIntersection,
-  circleCenterAtEdgeEnd,
+  edgeEndAndEdge,
   circleCenterOnLine,
   solve3x3,
   Circle,
-  clockwiseCircumcircle
+  clockwiseCircumcircle,
+  edgeEndAndVertex
 } from "../Geometry.js";
 import { assert } from "../utils.js";
 import { BorderEnd as GenericBorderEnd } from "../BorderEnd.js";
@@ -75,53 +76,37 @@ export class Voronoi {
   }
 
   private checkCircle1V2E(as: Vertex, bs: Edge, cs: Edge, b: BeachSegment): void {
-    // angle bisector of bs and cs as the line
-    const b_n = bs.normal;
-    const c_n = cs.normal;
     const
+      b_n = bs.normal,
+      c_n = cs.normal,
       d_n = sub(b_n, c_n),
-      C = bs.offset - cs.offset;
-    // direction along the line
-    const v = perp(d_n);
-    const line_s = Math.abs(d_n.x) > 1e-12 ? { x: C / d_n.x, y: 0 } : { x: 0, y: C / d_n.y };
-    const circles = circleCenterOnLine(line_s, v, as.p, dot(b_n, line_s) - bs.offset, dot(b_n, v))
-      .filter(({ center }) => as.inCone(center.x, center.y));
-    if (circles.length === 0)
-      console.log("1V2E 0 circle events");
-    if (circles.length === 2) {
-      console.log("1V2E 2 circle events, picking highest circle bottom");
-      const [{ center: { y: y1 }, radius: r1 }, { center: { y: y2 }, radius: r2 }] = circles;
-      if (y1 - r1 < y2 - r2) {
-        circles.splice(0, 1);
+      C = bs.offset - cs.offset,
+      v = perp(d_n),
+      line_s = Math.abs(d_n.x) > 1e-12 ? { x: C / d_n.x, y: 0 } : { x: 0, y: C / d_n.y },
+      circle = circleCenterOnLine(line_s, v, as.p, dot(b_n, line_s) - bs.offset, dot(b_n, v))
+    if (circle) {
+      if (as.inCone(circle.center)) {
+        this.emitCircle(circle, b);
       } else {
-        circles.splice(1, 1);
+        console.log("1V2E circle event outside cone");
       }
     }
-    circles.forEach((circle) => this.emitCircle(circle, b));
   }
 
   private checkCircle1E2V(as: Edge, bs: Vertex, cs: Vertex, b: BeachSegment,): void {
-    // general (E, V, V): perpendicular bisector of bs and cs as the line
-    const a_n = as.normal;
-    const d_n = scale(sub(cs.p, bs.p), 2)
-    //const C = cs.p.x * cs.p.x + cs.p.y * cs.p.y - bs.p.x * bs.p.x - bs.p.y * bs.p.y;
-    const C = dot(cs.p, cs.p) - dot(bs.p, bs.p);
-    const v = perp(d_n);
-    const line_s = Math.abs(d_n.x) > 1e-12 ? { x: C / d_n.x, y: 0 } : { x: 0, y: C / d_n.y };
-    const circles = circleCenterOnLine(line_s, v, bs.p, dot(a_n, line_s) - as.offset, dot(a_n, v))
-      .filter(({ center }) => bs.inCone(center.x, center.y) && cs.inCone(center.x, center.y));
-    if (circles.length === 0)
-      console.log("1E2V 0 circle events");
-    if (circles.length === 2) {
-      console.log("1E2V 2 circle events, picking highest circle bottom");
-      const [{ center: { y: y1 }, radius: r1 }, { center: { y: y2 }, radius: r2 }] = circles;
-      if (y1 - r1 < y2 - r2) {
-        circles.splice(0, 1);
+    const a_n = as.normal,
+      d_n = scale(sub(cs.p, bs.p), 2),
+      C = dot(cs.p, cs.p) - dot(bs.p, bs.p),
+      v = perp(d_n),
+      line_s = Math.abs(d_n.x) > 1e-12 ? { x: C / d_n.x, y: 0 } : { x: 0, y: C / d_n.y },
+      circle = circleCenterOnLine(line_s, v, bs.p, dot(a_n, line_s) - as.offset, dot(a_n, v))
+    if (circle) {
+      if (bs.inCone(circle.center) && cs.inCone(circle.center)) {
+        this.emitCircle(circle, b);
       } else {
-        circles.splice(1, 1);
+        console.log("1E2V circle event outside cone");
       }
     }
-    circles.forEach((circle) => this.emitCircle(circle, b));
   }
 
   private checkCircle(b?: BeachSegment): void {
@@ -135,82 +120,61 @@ export class Voronoi {
       this.emitCircle({ center: { x, y }, radius: r }, b);
     } else if (as instanceof Vertex && bs instanceof Edge && cs instanceof Edge) {
       if (bs.end === as) {
-        this.emitCircle(circleCenterAtEdgeEnd(as, bs, cs), b);
+        this.emitCircle(edgeEndAndEdge(as, bs, cs), b);
       } else {
         this.checkCircle1V2E(as, cs, bs, b);
       }
-    } else if (
-      as instanceof Edge &&
-      bs instanceof Vertex &&
-      cs instanceof Edge
-    ) {
+    } else if (      as instanceof Edge &&      bs instanceof Vertex &&      cs instanceof Edge    ) {
       if (as.start === bs && cs.end === bs) {
         //reflex vertex between its own edges: no circle event
       } else if (as.start === bs) {
-        this.emitCircle(circleCenterAtEdgeEnd(bs, as, cs), b);
+        this.emitCircle(edgeEndAndEdge(bs, as, cs), b);
       } else if (cs.end === bs) {
-        this.emitCircle(circleCenterAtEdgeEnd(bs, cs, as), b);
+        this.emitCircle(edgeEndAndEdge(bs, cs, as), b);
       } else {
         this.checkCircle1V2E(bs, as, cs, b);
       }
     } else if (as instanceof Edge && bs instanceof Edge && cs instanceof Vertex) {
       if (bs.start === cs) {
-        this.emitCircle(circleCenterAtEdgeEnd(cs, bs, as), b);
+        this.emitCircle(edgeEndAndEdge(cs, bs, as), b);
       } else {
         this.checkCircle1V2E(cs, bs, as, b);
       }
     } else if (as instanceof Vertex && bs instanceof Edge && cs instanceof Vertex) {
       if (bs.start === as || bs.end === as) {
-        const [ba, bb] = bs.matRow;
-        const cx = cs.p.x - as.p.x,
-          cy = cs.p.y - as.p.y;
-        const denom = 2 * (cx * ba + cy * bb);
-        if (Math.abs(denom) > 1e-12) {
-          const r = (cx * cx + cy * cy) / denom;
-          this.emitCircle({ center: { x: as.p.x + r * ba, y: as.p.y + r * bb }, radius: r }, b);
-        }
+        this.emitCircle(edgeEndAndVertex(as, bs, cs), b);
       } else if (bs.start === cs) {
-        const [ba, bb] = bs.matRow;
-        const ax = as.p.x - cs.p.x,
-          ay = as.p.y - cs.p.y;
-        const denom = 2 * (ax * ba + ay * bb);
+        const bs_n = bs.normal;
+        const a = sub(as.p, cs.p);
+        const denom = 2 * dot(a, bs_n);
         if (Math.abs(denom) > 1e-12) {
-          const r = (ax * ax + ay * ay) / denom;
-          this.emitCircle({ center: { x: cs.p.x + r * ba, y: cs.p.y + r * bb }, radius: r }, b);
+          const r = dot(a, a) / denom;
+          this.emitCircle({ center: add(cs.p, scale(bs_n, r)), radius: r }, b);
         }
       } else {
         this.checkCircle1E2V(bs, cs, as, b);
       }
     } else if (
-      as instanceof Vertex &&
-      bs instanceof Vertex &&
-      cs instanceof Edge
-    ) {
+      as instanceof Vertex && bs instanceof Vertex && cs instanceof Edge) {
       if (cs.end === bs) {
-        const [ca, cb] = cs.matRow;
-        const ax = as.p.x - bs.p.x,
-          ay = as.p.y - bs.p.y;
-        const denom = 2 * (ax * ca + ay * cb);
+        const cs_n = cs.normal;
+        const a = sub(as.p, bs.p);
+        const denom = 2 * dot(a, cs_n);
         if (Math.abs(denom) > 1e-12) {
-          const r = (ax * ax + ay * ay) / denom;
-          this.emitCircle({ center: { x: bs.p.x + r * ca, y: bs.p.y + r * cb }, radius: r }, b);
+          const r = dot(a, a) / denom;
+          this.emitCircle({ center: add(bs.p, scale(cs_n, r)), radius: r }, b);
         }
       } else {
         this.checkCircle1E2V(cs, as, bs, b);
       }
-    } else if (
-      as instanceof Edge &&
-      bs instanceof Vertex &&
-      cs instanceof Vertex
-    ) {
+    } else if (as instanceof Edge && bs instanceof Vertex && cs instanceof Vertex) {
       if (as.start === bs) {
-        const [aa, ab] = as.matRow;
-        const cx = cs.p.x - bs.p.x,
-          cy = cs.p.y - bs.p.y;
-        const denom = 2 * (cx * aa + cy * ab);
+        const a_n = as.normal;
+        const c = sub(cs.p, bs.p);
+        const denom = 2 * dot(c, a_n);
         if (Math.abs(denom) > 1e-12) {
-          const r = (cx * cx + cy * cy) / denom;
-          this.emitCircle({ center: { x: bs.p.x + r * aa, y: bs.p.y + r * ab }, radius: r }, b);
+          const r = dot(c, c) / denom;
+          this.emitCircle({ center: add(bs.p, scale(a_n, r)), radius: r }, b);
         }
       } else {
         this.checkCircle1E2V(as, bs, cs, b);
@@ -220,13 +184,7 @@ export class Voronoi {
       if (circle) this.emitCircle(circle, b);
     } else {
       console.log(
-        "Circle event not supported for " +
-        as.toString() +
-        " " +
-        bs.toString() +
-        " " +
-        cs.toString(),
-      );
+        "Circle event not supported for " + as.toString() + " " + bs.toString() + " " + cs.toString(),);
     }
   }
 
