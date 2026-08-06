@@ -9,10 +9,9 @@ import {
     type Bounds,
     type Viewport
 } from "./Viewport.js";
-import type { BeachSegment } from "./polygon/BeachSegment.js";
 import { CircleEvent } from "./sweep/CircleEvent.js";
 import { purgeStaleCircleEvents } from "./sweep/EventQueue.js";
-import { Voronoi, type VoronoiCenter } from "./polygon/Voronoi.js";
+import { Voronoi, type BeachSegment, type VoronoiCenter } from "./polygon/Voronoi.js";
 import { Edge } from "./polygon/Edge.js";
 import { Vertex } from "./polygon/Vertex.js";
 import { assert } from "./utils.js";
@@ -26,7 +25,7 @@ export class PolygonMode implements SiteMode {
     readonly footer = "Vertices are shown in world coordinates. The polygon is interpreted as one convex polygon for now.";
     readonly inputPlaceholder = "x,y or x y";
 
-    sites = [new Point(2, 4), new Point(0, 0), new Point(4, 0)];
+    sites = [{x: 2, y: 4}, {x: 0, y: 0}, {x: 4, y: 0}];
     selectedIndex = -1;
     algorithmComplete = false;
     hoveredCenter: VoronoiCenter | null = null;
@@ -42,7 +41,7 @@ export class PolygonMode implements SiteMode {
         try {
             const data = JSON.parse(stored) as { x: number; y: number }[];
             if (Array.isArray(data)) {
-                this.sites = data.map((d) => new Point(d.x, d.y));
+                this.sites = data.map((d) => ({x: d.x, y: d.y} as Point));
             }
         } catch {
             // Ignore JSON parse errors.
@@ -55,7 +54,7 @@ export class PolygonMode implements SiteMode {
 
     resetAlgorithm(): void {
         this.saveSites();
-        this.voronoi = new Voronoi(this.sites.map((s) => new Point(s.x, s.y)));
+        this.voronoi = new Voronoi(this.sites.map((s) => ({x: s.x, y: s.y} as Point)));
         this.algorithmComplete = false;
         this.lastCircle = null;
         this.hoveredCenter = null;
@@ -65,7 +64,7 @@ export class PolygonMode implements SiteMode {
     stepAlgorithm(): void {
         if (this.algorithmComplete) return;
         const next = this.voronoi.pq.peek();
-        this.lastCircle = next instanceof CircleEvent ? { center: next.center, radius: next.radius } : null;
+        this.lastCircle = next instanceof CircleEvent ? next.circle : null;
         if (!this.voronoi.step()) {
             this.algorithmComplete = true;
         }
@@ -167,7 +166,7 @@ export class PolygonMode implements SiteMode {
             ctx.strokeStyle = "#4a90e2";
             ctx.lineWidth = 1.5;
             ctx.setLineDash([6, 4]);
-            drawCircle(ctx, viewport, focusedCircle.center, focusedCircle.radius);
+            drawCircle(ctx, viewport, focusedCircle);
             ctx.restore();
         }
     }
@@ -189,8 +188,8 @@ export class PolygonMode implements SiteMode {
                 startPt = border.start;
             } else {
                 const arr = beachSegmentIntersection(siteA, siteB, sweepY);
-                if (arr.length < 2 || !Number.isFinite(arr[0])) return;
-                startPt = new Point(arr[0], arr[1]);
+                //if (arr.length < 2 || !Number.isFinite(arr[0])) return;
+                startPt = arr.center;
             }
 
             let endPt: Point;
@@ -198,8 +197,8 @@ export class PolygonMode implements SiteMode {
                 endPt = border.end;
             } else {
                 const arr = beachSegmentIntersection(siteB, siteA, sweepY);
-                if (arr.length < 2 || !Number.isFinite(arr[0])) return;
-                endPt = new Point(arr[0], arr[1]);
+                //if (arr.length < 2 || !Number.isFinite(arr[0])) return;
+                endPt = arr.center;
             }
 
             if (siteA instanceof Vertex && siteB instanceof Edge) {
@@ -308,7 +307,7 @@ export class PolygonMode implements SiteMode {
             while (arc) {
                 const ce = arc.circleEvent;
                 if (ce && ce.valid) {
-                    drawCircle(ctx, viewport, ce.center, ce.radius);
+                    drawCircle(ctx, viewport, ce.circle);
                 }
                 arc = arc.next;
             }
@@ -339,33 +338,26 @@ export class PolygonMode implements SiteMode {
 
     private drawBeachSegment(ctx: CanvasRenderingContext2D, viewport: Viewport, arc: BeachSegment, sweepY: number, canvas: HTMLCanvasElement): void {
         if (arc.site instanceof Edge) {
-            const [x1, y1] = arc.prev
-                ? beachSegmentIntersection(arc.prev.site, arc.site, sweepY).slice(0, 2)
-                : [
-                    arc.site.start.p.x + (arc.site.end.p.x - arc.site.start.p.x) * (sweepY - arc.site.start.p.y) / (arc.site.end.p.y - arc.site.start.p.y),
-                    sweepY
-                ];
-
-            const [x2, y2] = arc.next
-                ? beachSegmentIntersection(arc.site, arc.next.site, sweepY).slice(0, 2)
-                : [
-                    arc.site.start.p.x + (arc.site.end.p.x - arc.site.start.p.x) * (sweepY - arc.site.start.p.y) / (arc.site.end.p.y - arc.site.start.p.y),
-                    sweepY
-                ];
+            const p1 = arc.prev
+                ? beachSegmentIntersection(arc.prev.site, arc.site, sweepY).center
+                : {x: arc.site.start.p.x + (arc.site.end.p.x - arc.site.start.p.x) * (sweepY - arc.site.start.p.y) / (arc.site.end.p.y - arc.site.start.p.y), y: sweepY};
+            const p2 = arc.next
+                ? beachSegmentIntersection(arc.site, arc.next.site, sweepY).center
+                : {x: arc.site.start.p.x + (arc.site.end.p.x - arc.site.start.p.x) * (sweepY - arc.site.start.p.y) / (arc.site.end.p.y - arc.site.start.p.y), y: sweepY};
 
             ctx.beginPath();
-            ctx.moveTo(viewport.worldToScreenX(x1), viewport.worldToScreenY(y1));
-            ctx.lineTo(viewport.worldToScreenX(x2), viewport.worldToScreenY(y2));
+            ctx.moveTo(viewport.worldToScreenX(p1.x), viewport.worldToScreenY(p1.y));
+            ctx.lineTo(viewport.worldToScreenX(p2.x), viewport.worldToScreenY(p2.y));
             ctx.stroke();
         } else {
             let leftX = viewport.screenToWorldX(0);
             let rightX = viewport.screenToWorldX(canvas.getBoundingClientRect().width);
             if (arc.prev) {
-                const [x, ,] = beachSegmentIntersection(arc.prev.site, arc.site, sweepY);
+                const x = beachSegmentIntersection(arc.prev.site, arc.site, sweepY).center.x;
                 if (Number.isFinite(x)) leftX = x;
             }
             if (arc.next) {
-                const [x, ,] = beachSegmentIntersection(arc.site, arc.next.site, sweepY);
+                const x = beachSegmentIntersection(arc.site, arc.next.site, sweepY).center.x;
                 if (Number.isFinite(x)) rightX = x;
             }
             if (rightX <= leftX) return;

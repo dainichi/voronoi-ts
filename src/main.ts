@@ -253,7 +253,7 @@ function handlePointerMove(event: PointerEvent): void {
     if (state.dragMode === "move" && activeMode.selectedIndex >= 0) {
         const newX = state.dragSiteStartX + dx / viewport.scale;
         const newY = state.dragSiteStartY - dy / viewport.scale;
-        activeMode.moveSite(activeMode.selectedIndex, new Point(newX, newY));
+        activeMode.moveSite(activeMode.selectedIndex, {x: newX, y: newY});
         updatePointList();
         updateVertexList();
         updateToolbarButtons();
@@ -266,7 +266,7 @@ function handlePointerUp(event: PointerEvent): void {
         const rect = canvas.getBoundingClientRect();
         const x = event.clientX - rect.left;
         const y = event.clientY - rect.top;
-        const point = new Point(viewport.screenToWorldX(x), viewport.screenToWorldY(y));
+        const point = {x: viewport.screenToWorldX(x), y: viewport.screenToWorldY(y)};
         activeMode.addSite(point);
         updatePointList();
         updateVertexList();
@@ -292,7 +292,7 @@ function parseCoordinates(input: string): Point | null {
     const x = Number(parts[0]);
     const y = Number(parts[1]);
     if (Number.isFinite(x) && Number.isFinite(y)) {
-        return new Point(x, y);
+        return {x,y};
     }
     return null;
 }

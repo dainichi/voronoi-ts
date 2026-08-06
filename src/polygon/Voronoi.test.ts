@@ -4,7 +4,7 @@ import { Voronoi } from "./Voronoi.js";
 
 describe("Polygon Voronoi", () => {
     it("computes centers and edges from input polygon vertices", () => {
-        const sites = [new Point(0, 0), new Point(4, 0), new Point(2, 4)];
+        const sites = [{x: 0, y: 0}, {x: 4, y: 0}, {x: 2, y: 4}];
         const voronoi = new Voronoi(sites);
 
         voronoi.compute();

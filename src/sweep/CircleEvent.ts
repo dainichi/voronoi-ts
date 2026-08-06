@@ -1,3 +1,4 @@
+import { Circle } from "../Geometry.js";
 import { Point } from "../Point.js";
 
 export class CircleEvent<A> {
@@ -6,15 +7,14 @@ export class CircleEvent<A> {
     valid = true;
 
     constructor(
-        public readonly center: Point,
-        public readonly radius: number,
+        public readonly circle: Circle,
         public readonly beachSegment: A,
     ) {
-        this.x = center.x;
-        this.y = center.y - radius;
+        this.x = circle.center.x;
+        this.y = circle.center.y - circle.radius;
     }
 
     toString(): string {
-        return `CircleEvent(center=${this.center}, r=${this.radius}, yEvent=${this.y})`;
+        return `CircleEvent(center=${this.circle.center}, r=${this.circle.radius}, yEvent=${this.y})`;
     }
 }

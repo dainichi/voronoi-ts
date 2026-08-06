@@ -1,9 +1,10 @@
-import { Point } from "../Point.js";
+import { Point, Vec2 } from "../Point.js";
 import { Vertex } from "./Vertex.js";
-
 export class Edge {
 
     public readonly matRow: number[];
+    public readonly normal: Vec2;
+    public readonly offset: number;
 
     constructor(
         public readonly start: Vertex,
@@ -15,6 +16,8 @@ export class Edge {
         let a = - dy / length;
         let b = dx / length;
         this.matRow = [a, b, -1, a * start.p.x + b * start.p.y];
+        this.normal = {x: a, y: b};
+        this.offset = a * start.p.x + b * start.p.y;
     }
 
     toString(): string {

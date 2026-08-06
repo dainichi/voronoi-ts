@@ -1,6 +1,32 @@
-import { Point } from "./Point.js";
+import { add, dot, Point, scale, sub, Vec2 } from "./Point.js";
 import { Edge } from "./polygon/Edge.js";
 import { Vertex } from "./polygon/Vertex.js";
+
+export type Circle = { center: Point, radius: number };
+
+export function clockwiseCircumcircle(a: Point, b: Point, c: Point, eps = 1e-9): Circle | undefined {
+    const area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+
+    if (area > -eps) return undefined;
+
+    const d = 2 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+
+    if (Math.abs(d) < eps) return undefined;
+
+    const x =
+        ((a.x * a.x + a.y * a.y) * (b.y - c.y) +
+            (b.x * b.x + b.y * b.y) * (c.y - a.y) +
+            (c.x * c.x + c.y * c.y) * (a.y - b.y)) /
+        d;
+
+    const y =
+        ((a.x * a.x + a.y * a.y) * (c.x - b.x) +
+            (b.x * b.x + b.y * b.y) * (a.x - c.x) +
+            (c.x * c.x + c.y * c.y) * (b.x - a.x)) /
+        d;
+
+    return { center: { x, y }, radius: Math.hypot(x - a.x, y - a.y) };
+}
 
 export function parabolaIntersection(
     p1: Point,
@@ -9,17 +35,13 @@ export function parabolaIntersection(
 ): number {
     const z1 = p1.y - sweepY;
     const z2 = p2.y - sweepY;
-
     const a = z2 - z1;
 
-    if (a === 0) {
-        return (p1.x + p2.x) / 2;
-    }
+    if (a === 0) return (p1.x + p2.x) / 2;
 
     const b = z1 * p2.x - z2 * p1.x;
     const dx = p1.x - p2.x;
     const d = z1 * z2 * (dx * dx + a * a);
-
     return (-b + Math.sqrt(d)) / a;
 }
 
@@ -28,27 +50,27 @@ export function parabolaY(p: Point, d: number, x: number): number {
     return (dx * dx / (p.y - d) + p.y + d) / 2;
 }
 
-// Finds the point on line (x0+t*vx, y0+t*vy) equidistant from point (px,py)
+// Finds the point on line l0+t*v equidistant from point p
 // and an edge whose distance at the reference point is r0, changing at rate rv.
 export function circleCenterOnLine(
-    x0: number, y0: number, vx: number, vy: number,
-    px: number, py: number,
+    l0: Point, v: Vec2,
+    p: Point,
     r0: number, rv: number,
-): [number, number, number][] {
-    const dx = x0 - px, dy = y0 - py;
-    const qa = vx * vx + vy * vy - rv * rv;
-    const qb = 2 * (dx * vx + dy * vy - r0 * rv);
-    const qc = dx * dx + dy * dy - r0 * r0;
-    const disc =  qb * qb - 4 * qa * qc;
-    if (disc < 0 ) return [];
+): Circle[] {
+    const d = sub(l0, p);
+    const qa = dot(v, v) - rv * rv;
+    const qb = 2 * (dot(d, v) - r0 * rv);
+    const qc = dot(d, d) - r0 * r0;
+    const disc = qb * qb - 4 * qa * qc;
+    if (disc < 0) return [];
     const sqrtDisc = Math.sqrt(disc);
     const t1 = (-qb + sqrtDisc) / (2 * qa);
     const t2 = (-qb - sqrtDisc) / (2 * qa);
     const r1 = r0 + t1 * rv, r2 = r0 + t2 * rv;
 
-    let res: [number,number,number][] = [];
-    if(r1 >=0) res.push([x0 + t1 * vx, y0 + t1 * vy, r1]);
-    if(r2 >=0) res.push([x0 + t2 * vx, y0 + t2 * vy, r2]);
+    let res: Circle[] = [];
+    //if (r1 >= 0) res.push({ center: add(l0, scale(v, t1)), radius: r1 });
+    if (r2 >= 0) res.push({ center: add(l0, scale(v, t2)), radius: r2 });
     return res;
 }
 
@@ -56,33 +78,24 @@ export function circleCenterAtEdgeEnd(
     vertex: Vertex,
     edgeThroughVertex: Edge,
     otherEdge: Edge,
-): [number, number, number] {
-  const [ea, eb] = edgeThroughVertex.matRow;
-const [fa, fb, , fd] = otherEdge.matRow;
+): Circle {
+    const [ea, eb] = edgeThroughVertex.matRow;
+    const [fa, fb, , fd] = otherEdge.matRow;
 
-const r = (fd - vertex.p.x * fa - vertex.p.y * fb) / (ea * fa + eb * fb - 1);
-return [vertex.p.x + r * ea, vertex.p.y + r * eb, r];
+    const r = (fd - vertex.p.x * fa - vertex.p.y * fb) / (ea * fa + eb * fb - 1);
+    return { center: { x: vertex.p.x + r * ea, y: vertex.p.y + r * eb }, radius: r };
 }
 
-export function beachSegmentIntersection(
-    e1: Edge | Vertex,
-    e2: Edge | Vertex,
-    sweepY: number,
-): [number,number,number] {
+export function beachSegmentIntersection(e1: Edge | Vertex, e2: Edge | Vertex, sweepY: number,): Circle {
     if (e1 instanceof Edge && e2 instanceof Edge) {
-        return solve3x3([e1.matRow, e2.matRow, [0, 1, -1, sweepY]]);
+        const [x, y, r] = solve3x3([e1.matRow, e2.matRow, [0, 1, -1, sweepY]]);
+        return { center: { x, y }, radius: r };
     } else if (e1 instanceof Edge && e1.start === e2) {
-        let [a, b, c, d] = e1.matRow;
-        const r = (e2.p.y - sweepY) / (1 - b);
-        const x = e2.p.x + a * r;
-        const y = e2.p.y + b * r;
-        return [x, y, r];
+        const r = (e2.p.y - sweepY) / (1 - e1.normal.y);
+        return { center: add(e2.p, scale(e1.normal, r)), radius: r };
     } else if (e2 instanceof Edge && e2.end === e1) {
-        let [a, b, c, d] = e2.matRow;
-        const r = (e1.p.y - sweepY) / (1 - b);
-        const x = e1.p.x + a * r;
-        const y = e1.p.y + b * r;
-        return [x, y, r];
+        const r = (e1.p.y - sweepY) / (1 - e2.normal.y);
+        return { center: add(e1.p, scale(e2.normal, r)), radius: r };
     } else if (e1 instanceof Vertex && e2 instanceof Edge) {
         return edgeVertexIntersection(e2, e1, sweepY, true);
     } else if (e1 instanceof Edge && e2 instanceof Vertex) {
@@ -90,7 +103,7 @@ export function beachSegmentIntersection(
     } else if (e1 instanceof Vertex && e2 instanceof Vertex) {
         const x = parabolaIntersection(e1.p, e2.p, sweepY);
         const y = parabolaY(e1.p, sweepY, x);
-        return [x, y, y - sweepY];
+        return { center: { x, y }, radius: y - sweepY };
     } else {
         throw new Error("Invalid arguments for beachSegmentIntersection");
     }
@@ -105,7 +118,7 @@ function edgeVertexIntersection(
     vertex: Vertex,
     sweepY: number,
     vertexOnLeft: boolean
-): [number,number,number] {
+): Circle {
     const [a, b, , c] = edge.matRow;
     const vx = 1 - b, vy = a;
     const x0 = Math.abs(a) > 1e-12 ? (c - sweepY) / a : 0;
@@ -120,7 +133,7 @@ function edgeVertexIntersection(
     const s = (-B + sign * Math.sqrt(Math.max(0, B * B - 4 * A * C))) / (2 * A);
 
     const x = x0 + s * vx, y = y0 + s * vy;
-    return [x, y, y - sweepY];
+    return { center: { x, y }, radius: y - sweepY };
 }
 
 export function solve3x3(
@@ -135,29 +148,23 @@ export function solve3x3(
                 pivot = row;
             }
         }
-
         if (Math.abs(m[pivot][col]) < 1e-12) {
             throw new Error("Singular matrix");
         }
-
         if (pivot !== col) {
             [m[col], m[pivot]] = [m[pivot], m[col]];
         }
-
         const div = m[col][col];
         for (let j = col; j < 4; j++) {
             m[col][j] /= div;
         }
-
         for (let row = 0; row < 3; row++) {
             if (row === col) continue;
-
             const factor = m[row][col];
             for (let j = col; j < 4; j++) {
                 m[row][j] -= factor * m[col][j];
             }
         }
     }
-
     return [m[0][3], m[1][3], m[2][3]];
 }

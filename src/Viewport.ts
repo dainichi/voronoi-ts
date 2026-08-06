@@ -1,3 +1,4 @@
+import { Circle } from "./Geometry.js";
 import { Point } from "./Point.js";
 
 export type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
@@ -10,7 +11,7 @@ export class Viewport {
     constructor(private readonly canvas: HTMLCanvasElement) {}
 
     worldToScreen(p: Point): Point {
-        return new Point(this.worldToScreenX(p.x), this.worldToScreenY(p.y));
+        return {x: this.worldToScreenX(p.x), y: this.worldToScreenY(p.y)};
     }
 
     worldToScreenX(x: number): number {
@@ -89,10 +90,10 @@ export function drawLine(ctx: CanvasRenderingContext2D, viewport: Viewport, a: P
     ctx.stroke();
 }
 
-export function drawCircle(ctx: CanvasRenderingContext2D, viewport: Viewport, center: Point, radius: number): void {
-    const left = viewport.worldToScreenX(center.x - radius);
-    const top = viewport.worldToScreenY(center.y + radius);
-    const diameter = 2 * radius * viewport.scale;
+export function drawCircle(ctx: CanvasRenderingContext2D, viewport: Viewport, circle: Circle): void {
+    const left = viewport.worldToScreenX(circle.center.x - circle.radius);
+    const top = viewport.worldToScreenY(circle.center.y + circle.radius);
+    const diameter = 2 * circle.radius * viewport.scale;
     ctx.beginPath();
     ctx.ellipse(left + diameter / 2, top + diameter / 2, diameter / 2, diameter / 2, 0, 0, Math.PI * 2);
     ctx.stroke();
@@ -130,5 +131,5 @@ export function extendRayToBounds(p: Point, d: Point, bounds: Bounds): Point | n
         if (tY > 0 && tY < t) { t = tY; }
     }
     if (!Number.isFinite(t)) return null;
-    return new Point(p.x + t * d.x, p.y + t * d.y);
+    return {x: p.x + t * d.x, y: p.y + t * d.y};
 }

@@ -10,10 +10,9 @@ import {
     type Bounds,
     type Viewport
 } from "./Viewport.js";
-import type { BeachSegment } from "./point/BeachSegment.js";
 import { CircleEvent } from "./sweep/CircleEvent.js";
 import { purgeStaleCircleEvents } from "./sweep/EventQueue.js";
-import { Voronoi } from "./point/Voronoi.js";
+import { Voronoi, type BeachSegment } from "./point/Voronoi.js";
 
 const SITES_KEY = "voronoi-ts-point-sites";
 const LEGACY_SITES_KEY = "voronoi-ts-sites";
@@ -25,11 +24,11 @@ export class PointMode implements SiteMode {
     readonly footer = "Points are shown in world coordinates. Selected point is highlighted.";
     readonly inputPlaceholder = "x,y or x y";
 
-    sites = [
-        new Point(250, 100),
-        new Point(200, 200),
-        new Point(400, 280),
-        new Point(100, 300)
+    sites: Point[] = [
+        {x: 250, y: 100},
+        {x: 200, y: 200},
+        {x: 400, y: 280},
+        {x: 100, y: 300}
     ];
     selectedIndex = -1;
     algorithmComplete = false;
@@ -46,7 +45,7 @@ export class PointMode implements SiteMode {
         try {
             const data = JSON.parse(stored) as { x: number; y: number }[];
             if (Array.isArray(data)) {
-                this.sites = data.map((d) => new Point(d.x, d.y));
+                this.sites = data.map((d) => ({x: d.x, y: d.y} as Point));
             }
         } catch {
             // Ignore JSON parse errors.
@@ -59,7 +58,7 @@ export class PointMode implements SiteMode {
 
     resetAlgorithm(): void {
         this.saveSites();
-        this.voronoi = new Voronoi(this.sites.map((s) => new Point(s.x, s.y)));
+        this.voronoi = new Voronoi(this.sites.map((s) => ({x:s.x, y:s.y} as Point)));
         this.algorithmComplete = false;
         this.lastCircle = null;
         this.hoveredCenter = null;
@@ -69,7 +68,7 @@ export class PointMode implements SiteMode {
     stepAlgorithm(): void {
         if (this.algorithmComplete) return;
         const next = this.voronoi.pq.peek();
-        this.lastCircle = next instanceof CircleEvent ? { center: next.center, radius: next.radius } : null;
+        this.lastCircle = next instanceof CircleEvent ? next.circle : null;
         if (!this.voronoi.step()) {
             this.algorithmComplete = true;
         }
@@ -126,7 +125,7 @@ export class PointMode implements SiteMode {
     }
 
     getVertices(): {point: Point; label: string}[] {
-        return Array.from(this.voronoi.centers).map(vc => ({
+        return Array.from(this.voronoi.circles).map(vc => ({
             point: vc.center,
             label: `r = ${vc.radius.toFixed(2)}`
         }));
@@ -134,7 +133,7 @@ export class PointMode implements SiteMode {
 
     onHover(screenX: number, screenY: number, viewport: Viewport): boolean {
         const threshold = 10;
-        for (const vc of this.voronoi.centers) {
+        for (const vc of this.voronoi.circles) {
             const s = viewport.worldToScreen(vc.center);
             if (Math.hypot(s.x - screenX, s.y - screenY) < threshold) {
                 if (this.hoveredCenter === vc) return false;
@@ -148,7 +147,7 @@ export class PointMode implements SiteMode {
     }
 
     selectVoronoiVertex(index: number):void {
-        const all = Array.from(this.voronoi.centers);
+        const all = Array.from(this.voronoi.circles);
         this.selectedCenter = all[index] ?? null;
     }
 
@@ -168,7 +167,7 @@ export class PointMode implements SiteMode {
             ctx.strokeStyle = "#4a90e2";
             ctx.lineWidth = 1.5;
             ctx.setLineDash([6, 4]);
-            drawCircle(ctx, viewport, focusedCircle.center, focusedCircle.radius);
+            drawCircle(ctx, viewport, focusedCircle);
             ctx.restore();
         }
         this.drawProcessedCenters(ctx, viewport);
@@ -202,7 +201,7 @@ export class PointMode implements SiteMode {
                 const x = (edge.siteA.x + edge.siteB.x) / 2;
                 const topY = edge.start?.y ?? bounds.maxY;
                 const botY = edge.end?.y ?? (finalState ? bounds.minY : parabolaY(edge.siteA, sweepY, x));
-                drawLine(ctx, viewport, new Point(x, topY), new Point(x, botY));
+                drawLine(ctx, viewport, {x, y: topY}, {x, y: botY});
                 return;
             }
 
@@ -211,16 +210,16 @@ export class PointMode implements SiteMode {
                 const B = edge.siteB;
 
                 if (edge.start) {
-                    const far = extendRayToBounds(edge.start, new Point(A.y - B.y, B.x - A.x), bounds);
+                    const far = extendRayToBounds(edge.start, {x: A.y - B.y, y: B.x - A.x}, bounds);
                     if (far) drawLine(ctx, viewport, edge.start, far);
                 } else if (edge.end) {
-                    const far = extendRayToBounds(edge.end, new Point(B.y - A.y, A.x - B.x), bounds);
+                    const far = extendRayToBounds(edge.end, {x: B.y - A.y, y: A.x - B.x}, bounds);
                     if (far) drawLine(ctx, viewport, edge.end, far);
                 } else {
-                    const mid = new Point((A.x + B.x) / 2, (A.y + B.y) / 2);
-                    const dir = new Point(A.y - B.y, B.x - A.x);
+                    const mid = {x: (A.x + B.x) / 2, y: (A.y + B.y) / 2};
+                    const dir = {x: A.y - B.y, y: B.x - A.x};
                     const far1 = extendRayToBounds(mid, dir, bounds);
-                    const far2 = extendRayToBounds(mid, new Point(-dir.x, -dir.y), bounds);
+                    const far2 = extendRayToBounds(mid, {x: -dir.x, y: -dir.y}, bounds);
                     if (far1 && far2) drawLine(ctx, viewport, far1, far2);
                 }
                 return;
@@ -240,7 +239,7 @@ export class PointMode implements SiteMode {
                 ? edge.end.y
                 : parabolaY(edge.siteA, sweepY, x2);
 
-            drawLine(ctx, viewport, new Point(x1, y1), new Point(x2, y2));
+            drawLine(ctx, viewport, {x: x1, y: y1}, {x: x2, y: y2});
         });
         ctx.restore();
     }
@@ -261,10 +260,10 @@ export class PointMode implements SiteMode {
     }
 
     private drawProcessedCenters(ctx: CanvasRenderingContext2D, viewport: Viewport): void {
-        if (this.voronoi.centers.size === 0) return;
+        if (this.voronoi.circles.size === 0) return;
         ctx.save();
         ctx.fillStyle = "#c71585";
-        for (const {center} of this.voronoi.centers) {
+        for (const {center} of this.voronoi.circles) {
             const s = viewport.worldToScreen(center);
             ctx.beginPath();
             ctx.arc(s.x, s.y, 4, 0, Math.PI * 2);
@@ -282,7 +281,7 @@ export class PointMode implements SiteMode {
         while (arc) {
             const ce = arc.circleEvent;
             if (ce && ce.valid) {
-                drawCircle(ctx, viewport, ce.center, ce.radius);
+                drawCircle(ctx, viewport, ce.circle);
             }
             arc = arc.next;
         }

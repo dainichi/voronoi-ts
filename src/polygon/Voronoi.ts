@@ -1,18 +1,18 @@
-import { Point } from "../Point.js";
-export type VoronoiCenter = { center: Point; radius: number };
-import { Border as GenericBorder} from "../Border.js";
-import { BeachSegment } from "./BeachSegment.js";
+import { dot, perp, Point, scale, sub } from "../Point.js";
+import { Border as GenericBorder } from "../Border.js";
+import { BeachSegment as GenericBeachSegment } from "../BeachSegment.js";
 import { Vertex } from "./Vertex.js";
 import { Edge } from "./Edge.js";
 import { VertexEvent } from "./VertexEvent.js";
 import { CircleEvent } from "../sweep/CircleEvent.js";
 import { EventQueue, purgeStaleCircleEvents } from "../sweep/EventQueue.js";
-import type { Event } from "./Event.js";
 import {
   beachSegmentIntersection,
   circleCenterAtEdgeEnd,
   circleCenterOnLine,
   solve3x3,
+  Circle,
+  clockwiseCircumcircle
 } from "../Geometry.js";
 import { assert } from "../utils.js";
 import { BorderEnd as GenericBorderEnd } from "../BorderEnd.js";
@@ -21,6 +21,12 @@ type Border = GenericBorder<Edge | Vertex>;
 type BorderEnd = GenericBorderEnd<Edge | Vertex>;
 const Border = GenericBorder;
 const BorderEnd = GenericBorderEnd;
+type Event = VertexEvent | CircleEvent<BeachSegment>;
+const BeachSegment = GenericBeachSegment<Edge | Vertex>;
+
+export type VoronoiCenter = { center: Point; radius: number };
+export type BeachSegment = GenericBeachSegment<Edge | Vertex>;
+
 export class Voronoi {
   private static readonly EPS = 1e-9;
 
@@ -51,12 +57,12 @@ export class Voronoi {
     }
   }
 
-  private emitCircle(x: number, y: number, r: number, b: BeachSegment): void {
-    if (r <= 0) {
-      console.log(`skipping circle event with r=${r.toFixed(4)} at (${x.toFixed(3)}, ${y.toFixed(3)}) for ${b}`,);
+  private emitCircle(circle: Circle, b: BeachSegment): void {
+    if (circle.radius <= 0) {
+      console.log(`skipping circle event with r=${circle.radius.toFixed(4)} at (${circle.center.x.toFixed(3)}, ${circle.center.y.toFixed(3)}) for ${b}`,);
       return;
     }
-    const ce = new CircleEvent(new Point(x, y), r, b);
+    const ce = new CircleEvent(circle, b);
     b.circleEvent = ce;
     this.pq.push(ce);
   }
@@ -70,52 +76,52 @@ export class Voronoi {
 
   private checkCircle1V2E(as: Vertex, bs: Edge, cs: Edge, b: BeachSegment): void {
     // angle bisector of bs and cs as the line
-    const [a1, b1, , c1] = bs.matRow;
-    const [a2, b2, , c2] = cs.matRow;
-    const A = a1 - a2,
-      B = b1 - b2,
-      C = c1 - c2;
+    const b_n = bs.normal;
+    const c_n = cs.normal;
+    const
+      d_n = sub(b_n, c_n),
+      C = bs.offset - cs.offset;
     // direction along the line
-    const vx = -B,
-      vy = A;
-    const x0 = Math.abs(A) > 1e-12 ? C / A : 0;
-    const y0 = Math.abs(A) > 1e-12 ? 0 : C / B;
-    const circles = circleCenterOnLine(x0, y0, vx, vy, as.p.x, as.p.y, a1 * x0 + b1 * y0 - c1, a1 * vx + b1 * vy)
-      .filter(([x, y, r]) => as.inCone(x, y));
-    if (circles.length != 1) console.log("1V2E " + circles.length + " circle events");
-    circles.forEach(([x, y, r]) => this.emitCircle(x, y, r, b));
-  }
-
-  private checkCircle1E2V(
-    as: Edge,
-    bs: Vertex,
-    cs: Vertex,
-    b: BeachSegment,
-  ): void {
-    // general (E, V, V): perpendicular bisector of bs and cs as the line
-    const [aa, ab, , ad] = as.matRow;
-    const A = 2 * (cs.p.x - bs.p.x),
-      B = 2 * (cs.p.y - bs.p.y);
-    const C =
-      cs.p.x * cs.p.x + cs.p.y * cs.p.y - bs.p.x * bs.p.x - bs.p.y * bs.p.y;
-    const vx = -B,
-      vy = A;
-    const x0 = Math.abs(A) > 1e-12 ? C / A : 0;
-    const y0 = Math.abs(A) > 1e-12 ? 0 : C / B;
-    const circles = circleCenterOnLine(x0, y0, vx, vy, bs.p.x, bs.p.y, aa * x0 + ab * y0 - ad, aa * vx + ab * vy)
-      .filter(([x, y, r]) => bs.inCone(x, y) && cs.inCone(x, y));
+    const v = perp(d_n);
+    const line_s = Math.abs(d_n.x) > 1e-12 ? { x: C / d_n.x, y: 0 } : { x: 0, y: C / d_n.y };
+    const circles = circleCenterOnLine(line_s, v, as.p, dot(b_n, line_s) - bs.offset, dot(b_n, v))
+      .filter(({ center }) => as.inCone(center.x, center.y));
     if (circles.length === 0)
-      console.log("1E2V 0 circle events");
+      console.log("1V2E 0 circle events");
     if (circles.length === 2) {
-      console.log("1E2V 2 circle events, picking highest circle bottom");
-      const [[, y1, r1], [, y2, r2]] = circles;
+      console.log("1V2E 2 circle events, picking highest circle bottom");
+      const [{ center: { y: y1 }, radius: r1 }, { center: { y: y2 }, radius: r2 }] = circles;
       if (y1 - r1 < y2 - r2) {
         circles.splice(0, 1);
       } else {
         circles.splice(1, 1);
       }
     }
-    circles.forEach(([x, y, r]) => this.emitCircle(x, y, r, b));
+    circles.forEach((circle) => this.emitCircle(circle, b));
+  }
+
+  private checkCircle1E2V(as: Edge, bs: Vertex, cs: Vertex, b: BeachSegment,): void {
+    // general (E, V, V): perpendicular bisector of bs and cs as the line
+    const a_n = as.normal;
+    const d_n = scale(sub(cs.p, bs.p), 2)
+    //const C = cs.p.x * cs.p.x + cs.p.y * cs.p.y - bs.p.x * bs.p.x - bs.p.y * bs.p.y;
+    const C = dot(cs.p, cs.p) - dot(bs.p, bs.p);
+    const v = perp(d_n);
+    const line_s = Math.abs(d_n.x) > 1e-12 ? { x: C / d_n.x, y: 0 } : { x: 0, y: C / d_n.y };
+    const circles = circleCenterOnLine(line_s, v, bs.p, dot(a_n, line_s) - as.offset, dot(a_n, v))
+      .filter(({ center }) => bs.inCone(center.x, center.y) && cs.inCone(center.x, center.y));
+    if (circles.length === 0)
+      console.log("1E2V 0 circle events");
+    if (circles.length === 2) {
+      console.log("1E2V 2 circle events, picking highest circle bottom");
+      const [{ center: { y: y1 }, radius: r1 }, { center: { y: y2 }, radius: r2 }] = circles;
+      if (y1 - r1 < y2 - r2) {
+        circles.splice(0, 1);
+      } else {
+        circles.splice(1, 1);
+      }
+    }
+    circles.forEach((circle) => this.emitCircle(circle, b));
   }
 
   private checkCircle(b?: BeachSegment): void {
@@ -126,17 +132,12 @@ export class Voronoi {
 
     if (as instanceof Edge && bs instanceof Edge && cs instanceof Edge) {
       const [x, y, r] = solve3x3([as.matRow, bs.matRow, cs.matRow]);
-      this.emitCircle(x, y, r, b);
-    } else if (
-      as instanceof Vertex &&
-      bs instanceof Edge &&
-      cs instanceof Edge
-    ) {
+      this.emitCircle({ center: { x, y }, radius: r }, b);
+    } else if (as instanceof Vertex && bs instanceof Edge && cs instanceof Edge) {
       if (bs.end === as) {
-        const [x, y, r] = circleCenterAtEdgeEnd(as, bs, cs);
-        this.emitCircle(x, y, r, b);
+        this.emitCircle(circleCenterAtEdgeEnd(as, bs, cs), b);
       } else {
-        this.checkCircle1V2E(as, bs, cs, b);
+        this.checkCircle1V2E(as, cs, bs, b);
       }
     } else if (
       as instanceof Edge &&
@@ -146,30 +147,19 @@ export class Voronoi {
       if (as.start === bs && cs.end === bs) {
         //reflex vertex between its own edges: no circle event
       } else if (as.start === bs) {
-        const [x, y, r] = circleCenterAtEdgeEnd(bs, as, cs);
-        this.emitCircle(x, y, r, b);
+        this.emitCircle(circleCenterAtEdgeEnd(bs, as, cs), b);
       } else if (cs.end === bs) {
-        const [x, y, r] = circleCenterAtEdgeEnd(bs, cs, as);
-        this.emitCircle(x, y, r, b);
+        this.emitCircle(circleCenterAtEdgeEnd(bs, cs, as), b);
       } else {
         this.checkCircle1V2E(bs, as, cs, b);
       }
-    } else if (
-      as instanceof Edge &&
-      bs instanceof Edge &&
-      cs instanceof Vertex
-    ) {
+    } else if (as instanceof Edge && bs instanceof Edge && cs instanceof Vertex) {
       if (bs.start === cs) {
-        const [x, y, r] = circleCenterAtEdgeEnd(cs, bs, as);
-        this.emitCircle(x, y, r, b);
+        this.emitCircle(circleCenterAtEdgeEnd(cs, bs, as), b);
       } else {
-        this.checkCircle1V2E(cs, as, bs, b);
+        this.checkCircle1V2E(cs, bs, as, b);
       }
-    } else if (
-      as instanceof Vertex &&
-      bs instanceof Edge &&
-      cs instanceof Vertex
-    ) {
+    } else if (as instanceof Vertex && bs instanceof Edge && cs instanceof Vertex) {
       if (bs.start === as || bs.end === as) {
         const [ba, bb] = bs.matRow;
         const cx = cs.p.x - as.p.x,
@@ -177,7 +167,7 @@ export class Voronoi {
         const denom = 2 * (cx * ba + cy * bb);
         if (Math.abs(denom) > 1e-12) {
           const r = (cx * cx + cy * cy) / denom;
-          this.emitCircle(as.p.x + r * ba, as.p.y + r * bb, r, b);
+          this.emitCircle({ center: { x: as.p.x + r * ba, y: as.p.y + r * bb }, radius: r }, b);
         }
       } else if (bs.start === cs) {
         const [ba, bb] = bs.matRow;
@@ -186,10 +176,10 @@ export class Voronoi {
         const denom = 2 * (ax * ba + ay * bb);
         if (Math.abs(denom) > 1e-12) {
           const r = (ax * ax + ay * ay) / denom;
-          this.emitCircle(cs.p.x + r * ba, cs.p.y + r * bb, r, b);
+          this.emitCircle({ center: { x: cs.p.x + r * ba, y: cs.p.y + r * bb }, radius: r }, b);
         }
       } else {
-        this.checkCircle1E2V(bs, as, cs, b);
+        this.checkCircle1E2V(bs, cs, as, b);
       }
     } else if (
       as instanceof Vertex &&
@@ -203,7 +193,7 @@ export class Voronoi {
         const denom = 2 * (ax * ca + ay * cb);
         if (Math.abs(denom) > 1e-12) {
           const r = (ax * ax + ay * ay) / denom;
-          this.emitCircle(bs.p.x + r * ca, bs.p.y + r * cb, r, b);
+          this.emitCircle({ center: { x: bs.p.x + r * ca, y: bs.p.y + r * cb }, radius: r }, b);
         }
       } else {
         this.checkCircle1E2V(cs, as, bs, b);
@@ -220,38 +210,14 @@ export class Voronoi {
         const denom = 2 * (cx * aa + cy * ab);
         if (Math.abs(denom) > 1e-12) {
           const r = (cx * cx + cy * cy) / denom;
-          this.emitCircle(bs.p.x + r * aa, bs.p.y + r * ab, r, b);
+          this.emitCircle({ center: { x: bs.p.x + r * aa, y: bs.p.y + r * ab }, radius: r }, b);
         }
       } else {
         this.checkCircle1E2V(as, bs, cs, b);
       }
-    } else if (
-      as instanceof Vertex &&
-      bs instanceof Vertex &&
-      cs instanceof Vertex
-    ) {
-      const area =
-        (bs.p.x - as.p.x) * (cs.p.y - as.p.y) -
-        (bs.p.y - as.p.y) * (cs.p.x - as.p.x);
-      if (area > -Voronoi.EPS) return;
-      const d =
-        2 *
-        (as.p.x * (bs.p.y - cs.p.y) +
-          bs.p.x * (cs.p.y - as.p.y) +
-          cs.p.x * (as.p.y - bs.p.y));
-      if (Math.abs(d) < Voronoi.EPS) return;
-      const ux =
-        ((as.p.x * as.p.x + as.p.y * as.p.y) * (bs.p.y - cs.p.y) +
-          (bs.p.x * bs.p.x + bs.p.y * bs.p.y) * (cs.p.y - as.p.y) +
-          (cs.p.x * cs.p.x + cs.p.y * cs.p.y) * (as.p.y - bs.p.y)) /
-        d;
-      const uy =
-        ((as.p.x * as.p.x + as.p.y * as.p.y) * (cs.p.x - bs.p.x) +
-          (bs.p.x * bs.p.x + bs.p.y * bs.p.y) * (as.p.x - cs.p.x) +
-          (cs.p.x * cs.p.x + cs.p.y * cs.p.y) * (bs.p.x - as.p.x)) /
-        d;
-      const r = Math.hypot(ux - as.p.x, uy - as.p.y);
-      this.emitCircle(ux, uy, r, b);
+    } else if (as instanceof Vertex && bs instanceof Vertex && cs instanceof Vertex) {
+      const circle = clockwiseCircumcircle(as.p, bs.p, cs.p, Voronoi.EPS);
+      if (circle) this.emitCircle(circle, b);
     } else {
       console.log(
         "Circle event not supported for " +
@@ -265,16 +231,16 @@ export class Voronoi {
   }
 
   private handleCircleEvent(ce: CircleEvent<BeachSegment>): void {
-    const a = ce.beachSegment;
-    const c = ce.center;
+    const bs = ce.beachSegment;
+    const c = ce.circle.center;
 
-    const left = a.prev!;
-    const right = a.next!;
+    const left = bs.prev!;
+    const right = bs.next!;
 
     left.borderEndOnRight!.fix(c);
-    a.borderEndOnRight!.fix(c);
+    bs.borderEndOnRight!.fix(c);
 
-    a.remove();
+    bs.remove();
 
     const b = this.addNewBorder(right.site, left.site, c);
     left.borderEndOnRight = new BorderEnd(b, true);
@@ -301,7 +267,7 @@ export class Voronoi {
     if (ev instanceof VertexEvent) {
       this.handleVertexEvent(ev);
     } else if (ev instanceof CircleEvent) {
-      this.centers.add({ center: ev.center, radius: ev.radius });
+      this.centers.add({ center: ev.circle.center, radius: ev.circle.radius });
       this.handleCircleEvent(ev);
     }
     purgeStaleCircleEvents(this.pq);
@@ -398,10 +364,7 @@ export class Voronoi {
     hs.head = bs;
   }
 
-  private findArcAboveOrAddSection(v: Vertex): {
-    arc: BeachSegment;
-    sec: { head: BeachSegment; tail: BeachSegment };
-  } | null {
+  private findArcAboveOrAddSection(v: Vertex): { arc: BeachSegment; sec: { head: BeachSegment; tail: BeachSegment }; } | null {
     const x = v.p.x;
     const sweepY = v.p.y;
     for (let i = 0; i < this.beachSections.length; i++) {
@@ -432,7 +395,7 @@ export class Voronoi {
             return { arc, sec };
           break;
         }
-        const [rx] = beachSegmentIntersection(arc.site, arc.next.site, sweepY);
+        const rx = beachSegmentIntersection(arc.site, arc.next.site, sweepY).center.x;
         if (!Number.isFinite(rx) || x <= rx) return { arc, sec };
         arc = arc.next;
       }
