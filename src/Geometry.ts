@@ -92,12 +92,13 @@ export function edgeEndAndVertex(
     vertex: Vertex,
     edgeThroughVertex: Edge,
     otherVertex: Vertex,
-): Circle {
+): Circle | undefined {
     const ev_n = edgeThroughVertex.normal;
     const c = sub(otherVertex.p, vertex.p);
     const denom = 2 * dot(c, ev_n);
     if (Math.abs(denom) < 1e-12) {
-        throw new Error("Denominator too small in edgeEndAndVertex");
+        console.log("Denominator too small in edgeEndAndVertex");
+        return undefined;
     }
     const r = dot(c, c) / denom;
     return { center: add(vertex.p, scale(ev_n, r)), radius: r };
@@ -130,7 +131,6 @@ export function beachSegmentIntersection(e1: Edge | Vertex, e2: Edge | Vertex, s
 // vertexOnLeft: vertex is the left site -> want larger-x intersection (right boundary of vertex's arc)
 //               vertex is the right site -> want smaller-x intersection (left boundary)
 // sign = (vx > 0) == vertexOnLeft selects the correct root
-
 function edgeVertexIntersection(
     edge: Edge,
     vertex: Vertex,

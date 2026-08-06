@@ -1,11 +1,11 @@
 import { Point } from "../Point.js";
 import { Border as GenericBorder } from "../Border.js";
-import { BeachSegment as GenericBeachSegment, link, replace} from "../BeachSegment.js";
+import { BeachSegment as GenericBeachSegment, link, replace } from "../BeachSegment.js";
 import { SiteEvent } from "./SiteEvent.js";
 import { CircleEvent } from "../sweep/CircleEvent.js";
 import { EventQueue, purgeStaleCircleEvents } from "../sweep/EventQueue.js";
 import { Circle, clockwiseCircumcircle, parabolaIntersection } from "../Geometry.js";
-import { BorderEnd as GenericBorderEnd} from "../BorderEnd.js";
+import { BorderEnd as GenericBorderEnd } from "../BorderEnd.js";
 
 type Border = GenericBorder<Point>;
 type BorderEnd = GenericBorderEnd<Point>;
@@ -33,14 +33,14 @@ export class Voronoi {
 
   private checkCircle(b?: BeachSegment): void {
     if (!b || !b.prev || !b.next) return;
-    
+
     const A = b.prev.site,
       B = b.site,
       C = b.next.site;
 
-const circle = clockwiseCircumcircle(A, B, C, Voronoi.EPS);
-  if (!circle) return;
-    const ce = new CircleEvent(circle,  b);
+    const circle = clockwiseCircumcircle(A, B, C, Voronoi.EPS);
+    if (!circle) return;
+    const ce = new CircleEvent(circle, b);
     b.circleEvent = ce;
 
     this.pq.push(ce);
@@ -101,7 +101,7 @@ const circle = clockwiseCircumcircle(A, B, C, Voronoi.EPS);
   }
 
   compute(): void {
-    while (this.step()) {}
+    while (this.step()) { }
   }
 
   private findArcAbove(head: BeachSegment, p: Point): BeachSegment {
@@ -131,8 +131,8 @@ const circle = clockwiseCircumcircle(A, B, C, Voronoi.EPS);
     if (above.site.y === p.y) {
       const newArc = new BeachSegment(p, above.borderEndOnRight);
 
-replace(above, above, newArc);
-link(above, newArc);
+      replace(above, above, newArc);
+      link(above, newArc);
 
       const e = new Border(p, above.site);
       this.edges.add(e);
@@ -147,13 +147,13 @@ link(above, newArc);
     const e = new Border(p, above.site);
     this.edges.add(e);
 
-    const left = new BeachSegment(above.site, new BorderEnd (e,true));
+    const left = new BeachSegment(above.site, new BorderEnd(e, true));
     const center = new BeachSegment(p, new BorderEnd(e, false));
     const right = new BeachSegment(above.site, above.borderEndOnRight);
 
-replace(above, left, right);
-link(left, center);
-link(center, right);
+    replace(above, left, right);
+    link(left, center);
+    link(center, right);
 
     if (above === this.beachRoot) this.beachRoot = left;
 

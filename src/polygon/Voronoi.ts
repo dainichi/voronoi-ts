@@ -124,7 +124,7 @@ export class Voronoi {
       } else {
         this.checkCircle1V2E(as, cs, bs, b);
       }
-    } else if (      as instanceof Edge &&      bs instanceof Vertex &&      cs instanceof Edge    ) {
+    } else if (as instanceof Edge && bs instanceof Vertex && cs instanceof Edge) {
       if (as.start === bs && cs.end === bs) {
         //reflex vertex between its own edges: no circle event
       } else if (as.start === bs) {
@@ -142,40 +142,26 @@ export class Voronoi {
       }
     } else if (as instanceof Vertex && bs instanceof Edge && cs instanceof Vertex) {
       if (bs.start === as || bs.end === as) {
-        this.emitCircle(edgeEndAndVertex(as, bs, cs), b);
+        const circle = edgeEndAndVertex(as, bs, cs);
+        if (circle) this.emitCircle(circle, b);
       } else if (bs.start === cs) {
-        const bs_n = bs.normal;
-        const a = sub(as.p, cs.p);
-        const denom = 2 * dot(a, bs_n);
-        if (Math.abs(denom) > 1e-12) {
-          const r = dot(a, a) / denom;
-          this.emitCircle({ center: add(cs.p, scale(bs_n, r)), radius: r }, b);
-        }
+        const circle = edgeEndAndVertex(cs, bs, as);
+        if (circle) this.emitCircle(circle, b);
       } else {
         this.checkCircle1E2V(bs, cs, as, b);
       }
     } else if (
       as instanceof Vertex && bs instanceof Vertex && cs instanceof Edge) {
       if (cs.end === bs) {
-        const cs_n = cs.normal;
-        const a = sub(as.p, bs.p);
-        const denom = 2 * dot(a, cs_n);
-        if (Math.abs(denom) > 1e-12) {
-          const r = dot(a, a) / denom;
-          this.emitCircle({ center: add(bs.p, scale(cs_n, r)), radius: r }, b);
-        }
+        const circle = edgeEndAndVertex(bs, cs, as);
+        if (circle) this.emitCircle(circle, b);
       } else {
         this.checkCircle1E2V(cs, as, bs, b);
       }
     } else if (as instanceof Edge && bs instanceof Vertex && cs instanceof Vertex) {
       if (as.start === bs) {
-        const a_n = as.normal;
-        const c = sub(cs.p, bs.p);
-        const denom = 2 * dot(c, a_n);
-        if (Math.abs(denom) > 1e-12) {
-          const r = dot(c, c) / denom;
-          this.emitCircle({ center: add(bs.p, scale(a_n, r)), radius: r }, b);
-        }
+        const circle = edgeEndAndVertex(bs, as, cs);
+        if (circle) this.emitCircle(circle, b);
       } else {
         this.checkCircle1E2V(as, bs, cs, b);
       }
@@ -184,7 +170,7 @@ export class Voronoi {
       if (circle) this.emitCircle(circle, b);
     } else {
       console.log(
-        "Circle event not supported for " + as.toString() + " " + bs.toString() + " " + cs.toString(),);
+        "Circle event not supported for " + as.toString() + " " + bs.toString() + " " + cs.toString());
     }
   }
 

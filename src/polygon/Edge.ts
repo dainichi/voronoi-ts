@@ -2,7 +2,7 @@ import { dot, perp, length, Point, scale, sub, Vec2, normalize } from "../Point.
 import { Vertex } from "./Vertex.js";
 export class Edge {
 
-    public readonly matRow: number[];
+    public readonly matRow: [number,number,number,number];
     public readonly normal: Vec2;
     public readonly offset: number;
     public readonly asVec: Vec2;
