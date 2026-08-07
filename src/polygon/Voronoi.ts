@@ -115,16 +115,22 @@ export class Voronoi {
       bs = b.site,
       cs = b.next.site;
 
+    // ─────────────────────────────── EEE ───────────────────────────────
     if (as instanceof Edge && bs instanceof Edge && cs instanceof Edge) {
+
       const [x, y, r] = solve3x3([as.matRow, bs.matRow, cs.matRow]);
       this.emitCircle({ center: { x, y }, radius: r }, b);
-    } else if (as instanceof Vertex && bs instanceof Edge && cs instanceof Edge) {
+    }
+    // ─────────────────────────────── VEE ───────────────────────────────
+    else if (as instanceof Vertex && bs instanceof Edge && cs instanceof Edge) {
       if (bs.end === as) {
         this.emitCircle(edgeEndAndEdge(as, bs, cs), b);
       } else {
         this.checkCircle1V2E(as, cs, bs, b);
       }
-    } else if (as instanceof Edge && bs instanceof Vertex && cs instanceof Edge) {
+    }
+    // ─────────────────────────────── EVE ───────────────────────────────
+    else if (as instanceof Edge && bs instanceof Vertex && cs instanceof Edge) {
       if (as.start === bs && cs.end === bs) {
         //reflex vertex between its own edges: no circle event
       } else if (as.start === bs) {
@@ -134,13 +140,17 @@ export class Voronoi {
       } else {
         this.checkCircle1V2E(bs, as, cs, b);
       }
-    } else if (as instanceof Edge && bs instanceof Edge && cs instanceof Vertex) {
+    }
+    // ─────────────────────────────── EEV ───────────────────────────────
+    else if (as instanceof Edge && bs instanceof Edge && cs instanceof Vertex) {
       if (bs.start === cs) {
         this.emitCircle(edgeEndAndEdge(cs, bs, as), b);
       } else {
         this.checkCircle1V2E(cs, bs, as, b);
       }
-    } else if (as instanceof Vertex && bs instanceof Edge && cs instanceof Vertex) {
+    }
+    // ─────────────────────────────── VEV ───────────────────────────────
+    else if (as instanceof Vertex && bs instanceof Edge && cs instanceof Vertex) {
       if (bs.start === as || bs.end === as) {
         const circle = edgeEndAndVertex(as, bs, cs);
         if (circle) this.emitCircle(circle, b);
@@ -150,27 +160,29 @@ export class Voronoi {
       } else {
         this.checkCircle1E2V(bs, cs, as, b);
       }
-    } else if (
-      as instanceof Vertex && bs instanceof Vertex && cs instanceof Edge) {
+    }
+    // ─────────────────────────────── VVE ───────────────────────────────
+    else if (as instanceof Vertex && bs instanceof Vertex && cs instanceof Edge) {
       if (cs.end === bs) {
         const circle = edgeEndAndVertex(bs, cs, as);
         if (circle) this.emitCircle(circle, b);
       } else {
         this.checkCircle1E2V(cs, as, bs, b);
       }
-    } else if (as instanceof Edge && bs instanceof Vertex && cs instanceof Vertex) {
+    }
+    // ─────────────────────────────── EVV ───────────────────────────────
+    else if (as instanceof Edge && bs instanceof Vertex && cs instanceof Vertex) {
       if (as.start === bs) {
         const circle = edgeEndAndVertex(bs, as, cs);
         if (circle) this.emitCircle(circle, b);
       } else {
         this.checkCircle1E2V(as, bs, cs, b);
       }
-    } else if (as instanceof Vertex && bs instanceof Vertex && cs instanceof Vertex) {
+    }
+    // ─────────────────────────────── VVV ───────────────────────────────
+    else if (as instanceof Vertex && bs instanceof Vertex && cs instanceof Vertex) {
       const circle = clockwiseCircumcircle(as.p, bs.p, cs.p, Voronoi.EPS);
       if (circle) this.emitCircle(circle, b);
-    } else {
-      console.log(
-        "Circle event not supported for " + as.toString() + " " + bs.toString() + " " + cs.toString());
     }
   }
 
