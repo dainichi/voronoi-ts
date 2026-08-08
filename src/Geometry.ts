@@ -63,14 +63,14 @@ export function circleCenterOnLine(
     const qc = dot(d, d) - r0 * r0;
     const disc = qb * qb - 4 * qa * qc;
     if (disc < 0) {
-        console.log("negative discriminant"); 
+        console.log("negative discriminant");
         return undefined;
     }
     const sqrtDisc = Math.sqrt(disc);
     const t = (-qb - sqrtDisc) / (2 * qa);
     const r = r0 + t * rv;
 
-    if (r<0) {
+    if (r < 0) {
         console.log("negative radius");
         return undefined;
     }
@@ -84,7 +84,7 @@ export function edgeEndAndEdge(
 ): Circle {
     const ev_n = edgeThroughVertex.normal;
     const oe_n = otherEdge.normal;
-    const r = (otherEdge.offset - dot(vertex.p, oe_n)) / (dot(ev_n, oe_n) - 1); 
+    const r = (otherEdge.offset - dot(vertex.p, oe_n)) / (dot(ev_n, oe_n) - 1);
     return { center: add(vertex.p, scale(ev_n, r)), radius: r };
 }
 
@@ -105,7 +105,7 @@ export function edgeEndAndVertex(
 }
 
 
-export function beachSegmentIntersection(e1: Edge | Vertex, e2: Edge | Vertex, sweepY: number,): Circle {
+export function beachSegmentIntersection(e1: Edge | Vertex, e2: Edge | Vertex, sweepY: number): Circle {
     if (e1 instanceof Edge && e2 instanceof Edge) {
         const [x, y, r] = solve3x3([e1.matRow, e2.matRow, [0, 1, -1, sweepY]]);
         return { center: { x, y }, radius: r };
@@ -131,12 +131,7 @@ export function beachSegmentIntersection(e1: Edge | Vertex, e2: Edge | Vertex, s
 // vertexOnLeft: vertex is the left site -> want larger-x intersection (right boundary of vertex's arc)
 //               vertex is the right site -> want smaller-x intersection (left boundary)
 // sign = (vx > 0) == vertexOnLeft selects the correct root
-function edgeVertexIntersection(
-    edge: Edge,
-    vertex: Vertex,
-    sweepY: number,
-    vertexOnLeft: boolean
-): Circle {
+function edgeVertexIntersection(edge: Edge, vertex: Vertex, sweepY: number, vertexOnLeft: boolean): Circle {
     const [a, b, , c] = edge.matRow;
     const vx = 1 - b, vy = a;
     const x0 = Math.abs(a) > 1e-12 ? (c - sweepY) / a : 0;
