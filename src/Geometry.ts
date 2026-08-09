@@ -1,8 +1,6 @@
 import { add, dot, perp, Point, scale, sub, Vec2 } from "./Point.js";
-import { Edge } from "./polygon/Edge.js";
-import { Vertex } from "./polygon/Vertex.js";
 
-export type Line = { normal: Vec2, offset: number};
+export type Line = { normal: Vec2, offset: number };
 
 export function matRow(line: Line): [number, number, number, number] {
     return [line.normal.x, line.normal.y, -1, line.offset];
@@ -87,19 +85,19 @@ export function circleTangentTo2LinesThroughPoint(l1: Line, l2: Line, p: Point):
         C = l1.offset - l2.offset,
         v = perp(d_n),
         l0 = Math.abs(d_n.x) > 1e-12 ? { x: C / d_n.x, y: 0 } : { x: 0, y: C / d_n.y };
-    return circleCenterOnLine(l0, v, p, dot(n1, l0) - l1.offset, dot(n1, v))
+    return circleCenterOnLine(l0, v, p, dot(n1, l0) - l1.offset, dot(n1, v));
 }
 
 export function circleTangentToLineThrough2Points(l: Line, p1: Point, p2: Point): Circle | undefined {
     const a_n = l.normal,
-      d_n = scale(sub(p2, p1), 2),
-      C = dot(p2, p2) - dot(p1, p1),
-      v = perp(d_n),
-      line_s = Math.abs(d_n.x) > 1e-12 ? { x: C / d_n.x, y: 0 } : { x: 0, y: C / d_n.y }
-      return circleCenterOnLine(line_s, v, p2, dot(a_n, line_s) - l.offset, dot(a_n, v))
+        d_n = scale(sub(p2, p1), 2),
+        C = dot(p2, p2) - dot(p1, p1),
+        v = perp(d_n),
+        line_s = Math.abs(d_n.x) > 1e-12 ? { x: C / d_n.x, y: 0 } : { x: 0, y: C / d_n.y };
+    return circleCenterOnLine(line_s, v, p2, dot(a_n, line_s) - l.offset, dot(a_n, v));
 }
 
-export function LineThroughPointAndLine(point:Point, lineThroughPoint: Line, otherLine: Line): Circle | undefined {
+export function lineThroughPointAndLine(point: Point, lineThroughPoint: Line, otherLine: Line): Circle | undefined {
     const ev_n = lineThroughPoint.normal;
     const oe_n = otherLine.normal;
     const r = (otherLine.offset - dot(point, oe_n)) / (dot(ev_n, oe_n) - 1);
@@ -110,37 +108,16 @@ export function LineThroughPointAndLine(point:Point, lineThroughPoint: Line, oth
     return { center: add(point, scale(ev_n, r)), radius: r };
 }
 
-export function edgeThroughVertexAndVertex(vertex: Vertex, edgeThroughVertex: Edge, otherVertex: Vertex): Circle | undefined {
-    const ev_n = edgeThroughVertex.line.normal;
-    const c = sub(otherVertex.p, vertex.p);
+export function lineThroughPointAndPoint(point: Point, lineThroughPoint: Line, otherPoint: Point): Circle | undefined {
+    const ev_n = lineThroughPoint.normal;
+    const c = sub(otherPoint, point);
     const denom = 2 * dot(c, ev_n);
     if (Math.abs(denom) < 1e-12) {
         console.log("Denominator too small in edgeThroughVertexAndVertex");
         return undefined;
     }
     const r = dot(c, c) / denom;
-    return { center: add(vertex.p, scale(ev_n, r)), radius: r };
-}
-
-// vertexOnLeft: vertex is the left site -> want larger-x intersection (right boundary of vertex's arc)
-//               vertex is the right site -> want smaller-x intersection (left boundary)
-// sign = (vx > 0) == vertexOnLeft selects the correct root
-export function edgeVertexIntersection(edge: Edge, vertex: Vertex, sweepY: number, vertexOnLeft: boolean): Circle {
-    const [a, b, , c] = matRow(edge.line);
-    const vx = 1 - b, vy = a;
-    const x0 = Math.abs(a) > 1e-12 ? (c - sweepY) / a : 0;
-    const y0 = Math.abs(a) > 1e-12 ? 0 : (c - sweepY) / (b - 1);
-    const dx = x0 - vertex.p.x, dy = y0 - vertex.p.y;
-
-    const A = vx * vx;
-    const B = 2 * (dx * vx + dy * vy) - 2 * vy * (y0 - sweepY);
-    const C = dx * dx + dy * dy - (y0 - sweepY) * (y0 - sweepY);
-
-    const sign = (vx > 0) === vertexOnLeft ? 1 : -1;
-    const s = (-B + sign * Math.sqrt(Math.max(0, B * B - 4 * A * C))) / (2 * A);
-
-    const x = x0 + s * vx, y = y0 + s * vy;
-    return { center: { x, y }, radius: y - sweepY };
+    return { center: add(point, scale(ev_n, r)), radius: r };
 }
 
 export function solve3x3(matrix: readonly [

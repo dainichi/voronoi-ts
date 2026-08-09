@@ -7,32 +7,30 @@ import { VertexEvent } from "./VertexEvent.js";
 import { CircleEvent } from "../sweep/CircleEvent.js";
 import { EventQueue, purgeStaleCircleEvents } from "../sweep/EventQueue.js";
 import {
-  //EdgeThroughVertexAndEdge,
-  circleCenterOnLine,
   solve3x3,
   Circle,
   clockwiseCircumcircle,
-  edgeThroughVertexAndVertex,
+  lineThroughPointAndPoint,
   matRow,
   circleTangentTo2LinesThroughPoint,
   circleTangentToLineThrough2Points,
-  edgeVertexIntersection,
   parabolaIntersection,
   parabolaY,
-  LineThroughPointAndLine
+  lineThroughPointAndLine
 } from "../Geometry.js";
 import { assert } from "../utils.js";
 import { BorderEnd as GenericBorderEnd } from "../BorderEnd.js";
 
-type Border = GenericBorder<Edge | Vertex>;
-type BorderEnd = GenericBorderEnd<Edge | Vertex>;
+type Site = Edge | Vertex;
+type Border = GenericBorder<Site>;
+type BorderEnd = GenericBorderEnd<Site>;
 const Border = GenericBorder;
 const BorderEnd = GenericBorderEnd;
 type Event = VertexEvent | CircleEvent<BeachSegment>;
-const BeachSegment = GenericBeachSegment<Edge | Vertex>;
+const BeachSegment = GenericBeachSegment<Site>;
 
 export type VoronoiCenter = { center: Point; radius: number };
-export type BeachSegment = GenericBeachSegment<Edge | Vertex>;
+export type BeachSegment = GenericBeachSegment<Site>;
 
 export class Voronoi {
   private static readonly EPS = 1e-9;
@@ -74,30 +72,30 @@ export class Voronoi {
     this.pq.push(ce);
   }
 
-  private addNewBorder(left: Edge | Vertex, right: Edge | Vertex, start?: Point): Border {
+  private addNewBorder(left: Site, right: Site, start?: Point): Border {
     const a = new Border(left, right);
     if (start) a.start = start;
     this.borders.add(a);
     return a;
   }
 
-  private checkCircle1V2E(as: Vertex, bs: Edge, cs: Edge, b: BeachSegment): void {
+  private circle1V2E(as: Vertex, bs: Edge, cs: Edge): Circle | undefined {
     const
       circle = circleTangentTo2LinesThroughPoint(bs.line, cs.line, as.p);
     if (circle) {
       if (as.inCone(circle.center)) {
-        this.emitCircle(circle, b);
+        return circle;
       } else {
         console.log("1V2E circle event outside cone");
       }
     }
   }
 
-  private checkCircle1E2V(as: Edge, bs: Vertex, cs: Vertex, b: BeachSegment,): void {
+  private circle1E2V(as: Edge, bs: Vertex, cs: Vertex): Circle | undefined {
     const circle = circleTangentToLineThrough2Points(as.line, bs.p, cs.p);
     if (circle) {
       if (bs.inCone(circle.center) && cs.inCone(circle.center)) {
-        this.emitCircle(circle, b);
+        return circle;
       } else {
         console.log("1E2V circle event outside cone");
       }
@@ -109,20 +107,19 @@ export class Voronoi {
     const as = b.prev.site,
       bs = b.site,
       cs = b.next.site;
+    let circle: Circle | undefined;
 
     // ─────────────────────────────── EEE ───────────────────────────────
     if (as instanceof Edge && bs instanceof Edge && cs instanceof Edge) {
-
       const [x, y, r] = solve3x3([matRow(as.line), matRow(bs.line), matRow(cs.line)]);
-      this.emitCircle({ center: { x, y }, radius: r }, b);
+      circle = { center: { x, y }, radius: r };
     }
     // ─────────────────────────────── VEE ───────────────────────────────
     else if (as instanceof Vertex && bs instanceof Edge && cs instanceof Edge) {
       if (bs.end === as) {
-        const circle = LineThroughPointAndLine(as.p, bs.line, cs.line)
-        if (circle) this.emitCircle(circle, b);
+        circle = lineThroughPointAndLine(as.p, bs.line, cs.line)
       } else {
-        this.checkCircle1V2E(as, cs, bs, b);
+        circle = this.circle1V2E(as, cs, bs);
       }
     }
     // ─────────────────────────────── EVE ───────────────────────────────
@@ -130,59 +127,53 @@ export class Voronoi {
       if (as.start === bs && cs.end === bs) {
         //reflex vertex between its own edges: no circle event
       } else if (as.start === bs) {
-        const circle = LineThroughPointAndLine(bs.p, as.line, cs.line);
-        if (circle) this.emitCircle(circle, b);
+        circle = lineThroughPointAndLine(bs.p, as.line, cs.line);
       } else if (cs.end === bs) {
-        const circle = LineThroughPointAndLine(bs.p, cs.line, as.line);
-        if (circle) this.emitCircle(circle, b);
+        circle = lineThroughPointAndLine(bs.p, cs.line, as.line);
       } else {
-        this.checkCircle1V2E(bs, as, cs, b);
+        circle = this.circle1V2E(bs, as, cs);
       }
     }
     // ─────────────────────────────── EEV ───────────────────────────────
     else if (as instanceof Edge && bs instanceof Edge && cs instanceof Vertex) {
       if (bs.start === cs) {
-        const circle = LineThroughPointAndLine(cs.p, bs.line, as.line)
-        if (circle) this.emitCircle(circle, b);
+        circle = lineThroughPointAndLine(cs.p, bs.line, as.line)
       } else {
-        this.checkCircle1V2E(cs, bs, as, b);
+        circle = this.circle1V2E(cs, bs, as);
       }
     }
     // ─────────────────────────────── VEV ───────────────────────────────
     else if (as instanceof Vertex && bs instanceof Edge && cs instanceof Vertex) {
       if (bs.start === as || bs.end === as) {
-        const circle = edgeThroughVertexAndVertex(as, bs, cs);
-        if (circle) this.emitCircle(circle, b);
+        circle = lineThroughPointAndPoint(as.p, bs.line, cs.p);
       } else if (bs.start === cs) {
-        const circle = edgeThroughVertexAndVertex(cs, bs, as);
-        if (circle) this.emitCircle(circle, b);
+        circle = lineThroughPointAndPoint(cs.p, bs.line, as.p);
       } else {
-        this.checkCircle1E2V(bs, cs, as, b);
+        circle = this.circle1E2V(bs, cs, as);
       }
     }
     // ─────────────────────────────── VVE ───────────────────────────────
     else if (as instanceof Vertex && bs instanceof Vertex && cs instanceof Edge) {
       if (cs.end === bs) {
-        const circle = edgeThroughVertexAndVertex(bs, cs, as);
-        if (circle) this.emitCircle(circle, b);
+        circle = lineThroughPointAndPoint(bs.p, cs.line, as.p);
       } else {
-        this.checkCircle1E2V(cs, as, bs, b);
+        circle = this.circle1E2V(cs, as, bs);
       }
     }
     // ─────────────────────────────── EVV ───────────────────────────────
     else if (as instanceof Edge && bs instanceof Vertex && cs instanceof Vertex) {
       if (as.start === bs) {
-        const circle = edgeThroughVertexAndVertex(bs, as, cs);
-        if (circle) this.emitCircle(circle, b);
+        circle = lineThroughPointAndPoint(bs.p, as.line, cs.p);
       } else {
-        this.checkCircle1E2V(as, bs, cs, b);
+        circle = this.circle1E2V(as, bs, cs);
       }
     }
     // ─────────────────────────────── VVV ───────────────────────────────
     else if (as instanceof Vertex && bs instanceof Vertex && cs instanceof Vertex) {
-      const circle = clockwiseCircumcircle(as.p, bs.p, cs.p, Voronoi.EPS);
-      if (circle) this.emitCircle(circle, b);
+      circle = clockwiseCircumcircle(as.p, bs.p, cs.p, Voronoi.EPS);
     }
+
+    if (circle) this.emitCircle(circle, b);
   }
 
   private handleCircleEvent(ce: CircleEvent<BeachSegment>): void {
@@ -307,13 +298,13 @@ export class Voronoi {
     }
   }
 
-  addToEnd(ts: { head: BeachSegment; tail: BeachSegment }, beachSite: Edge | Vertex, startPointOrBorderEnd: Point | BorderEnd) {
+  addToEnd(ts: { head: BeachSegment; tail: BeachSegment }, beachSite: Site, startPointOrBorderEnd: Point | BorderEnd) {
     const bs = new BeachSegment(beachSite);
     this.connectWithBorder(ts.tail, bs, startPointOrBorderEnd);
     ts.tail = bs;
   }
 
-  addToFront(hs: { head: BeachSegment; tail: BeachSegment }, beachSite: Edge | Vertex, startPointOrBorderEnd: Point | BorderEnd): void {
+  addToFront(hs: { head: BeachSegment; tail: BeachSegment }, beachSite: Site, startPointOrBorderEnd: Point | BorderEnd): void {
     const bs = new BeachSegment(beachSite);
     this.connectWithBorder(bs, hs.head, startPointOrBorderEnd);
     hs.head = bs;
@@ -369,34 +360,44 @@ export class Voronoi {
   }
 }
 
-export function beachSegmentIntersection(e1: Edge | Vertex, e2: Edge | Vertex, sweepY: number): Circle {
+export function beachSegmentIntersection(s1: Site, s2: Site, sweepY: number): Circle {
+  let circle: Circle | undefined;
+  const sweepLine = { normal: { x: 0, y: 1 }, offset: sweepY };
   // ─────────────────────────────── EE ───────────────────────────────
-  if (e1 instanceof Edge && e2 instanceof Edge) {
-    const [x, y, r] = solve3x3([matRow(e1.line), matRow(e2.line), [0, 1, -1, sweepY]]);
-    return { center: { x, y }, radius: r };
+  if (s1 instanceof Edge && s2 instanceof Edge) {
+    const [x, y, r] = solve3x3([matRow(s1.line), matRow(s2.line), [0, 1, -1, sweepY]]);
+    circle = { center: { x, y }, radius: r };
   }
   // ─────────────────────────────── EV ───────────────────────────────
-  else if (e1 instanceof Edge && e1.start === e2) {
-    const r = (e2.p.y - sweepY) / (1 - e1.line.normal.y);
-    return { center: add(e2.p, scale(e1.line.normal, r)), radius: r };
-  } else if (e1 instanceof Edge && e2 instanceof Vertex) {
-    return edgeVertexIntersection(e1, e2, sweepY, false);
+  else if (s1 instanceof Edge && s2 instanceof Vertex) {
+    if (s1.start === s2) {
+      circle = lineThroughPointAndLine(s2.p, s1.line, sweepLine);
+    } else if (s2.p.y === sweepY) {
+      circle = lineThroughPointAndLine(s2.p, sweepLine, s1.line);
+    } else {
+      circle = circleTangentTo2LinesThroughPoint(s1.line, sweepLine, s2.p);
+    }
   }
   // ─────────────────────────────── VE ───────────────────────────────
-
-  else if (e2 instanceof Edge && e2.end === e1) {
-    const r = (e1.p.y - sweepY) / (1 - e2.line.normal.y);
-    return { center: add(e1.p, scale(e2.line.normal, r)), radius: r };
-  } else if (e1 instanceof Vertex && e2 instanceof Edge) {
-    return edgeVertexIntersection(e2, e1, sweepY, true);
+  else if (s1 instanceof Vertex && s2 instanceof Edge) {
+    if (s2.end === s1) {
+      circle = lineThroughPointAndLine(s1.p, s2.line, sweepLine);
+    } else if (s1.p.y === sweepY) {
+      circle = lineThroughPointAndLine(s1.p, sweepLine, s2.line);
+    } else {
+      circle = circleTangentTo2LinesThroughPoint(sweepLine, s2.line, s1.p);
+    }
   }
   // ─────────────────────────────── VV ───────────────────────────────
-  else if (e1 instanceof Vertex && e2 instanceof Vertex) {
-    const x = parabolaIntersection(e1.p, e2.p, sweepY);
-    const y = parabolaY(e1.p, sweepY, x);
-    return { center: { x, y }, radius: y - sweepY };
+  else if (s1 instanceof Vertex && s2 instanceof Vertex) {
+    const x = parabolaIntersection(s1.p, s2.p, sweepY);
+    const y = parabolaY(s1.p, sweepY, x);
+    circle = { center: { x, y }, radius: y - sweepY };
   } else {
     throw new Error("Invalid arguments for beachSegmentIntersection");
+  }
+  if (circle) return circle; else {
+    throw new Error("no circle for beachSegmentIntersection");
   }
 }
 
