@@ -220,8 +220,8 @@ export class PolygonMode implements SiteMode {
         start: Point,
         end: Point
     ): void {
-        const { x: a, y: b } = edge.normal;
-        const p = (dot(edge.normal, vertex.p) - edge.offset) / 2;
+        const { x: a, y: b } = edge.line.normal;
+        const p = (dot(edge.line.normal, vertex.p) - edge.line.offset) / 2;
         if (Math.abs(p) < 1e-12) { drawLine(ctx, viewport, start, end); return; }
 
         const Vx = vertex.p.x - p * a, Vy = vertex.p.y - p * b;

@@ -13,7 +13,8 @@ import {
   solve3x3,
   Circle,
   clockwiseCircumcircle,
-  edgeEndAndVertex
+  edgeEndAndVertex,
+  matRow
 } from "../Geometry.js";
 import { assert } from "../utils.js";
 import { BorderEnd as GenericBorderEnd } from "../BorderEnd.js";
@@ -77,13 +78,13 @@ export class Voronoi {
 
   private checkCircle1V2E(as: Vertex, bs: Edge, cs: Edge, b: BeachSegment): void {
     const
-      b_n = bs.normal,
-      c_n = cs.normal,
+      b_n = bs.line.normal,
+      c_n = cs.line.normal,
       d_n = sub(b_n, c_n),
-      C = bs.offset - cs.offset,
+      C = bs.line.offset - cs.line.offset,
       v = perp(d_n),
       line_s = Math.abs(d_n.x) > 1e-12 ? { x: C / d_n.x, y: 0 } : { x: 0, y: C / d_n.y },
-      circle = circleCenterOnLine(line_s, v, as.p, dot(b_n, line_s) - bs.offset, dot(b_n, v))
+      circle = circleCenterOnLine(line_s, v, as.p, dot(b_n, line_s) - bs.line.offset, dot(b_n, v))
     if (circle) {
       if (as.inCone(circle.center)) {
         this.emitCircle(circle, b);
@@ -94,12 +95,12 @@ export class Voronoi {
   }
 
   private checkCircle1E2V(as: Edge, bs: Vertex, cs: Vertex, b: BeachSegment,): void {
-    const a_n = as.normal,
+    const a_n = as.line.normal,
       d_n = scale(sub(cs.p, bs.p), 2),
       C = dot(cs.p, cs.p) - dot(bs.p, bs.p),
       v = perp(d_n),
       line_s = Math.abs(d_n.x) > 1e-12 ? { x: C / d_n.x, y: 0 } : { x: 0, y: C / d_n.y },
-      circle = circleCenterOnLine(line_s, v, bs.p, dot(a_n, line_s) - as.offset, dot(a_n, v))
+      circle = circleCenterOnLine(line_s, v, bs.p, dot(a_n, line_s) - as.line.offset, dot(a_n, v))
     if (circle) {
       if (bs.inCone(circle.center) && cs.inCone(circle.center)) {
         this.emitCircle(circle, b);
@@ -118,7 +119,7 @@ export class Voronoi {
     // ─────────────────────────────── EEE ───────────────────────────────
     if (as instanceof Edge && bs instanceof Edge && cs instanceof Edge) {
 
-      const [x, y, r] = solve3x3([as.matRow, bs.matRow, cs.matRow]);
+      const [x, y, r] = solve3x3([matRow(as.line), matRow(bs.line), matRow(cs.line)]);
       this.emitCircle({ center: { x, y }, radius: r }, b);
     }
     // ─────────────────────────────── VEE ───────────────────────────────

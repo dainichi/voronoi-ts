@@ -2,6 +2,12 @@ import { add, dot, Point, scale, sub, Vec2 } from "./Point.js";
 import { Edge } from "./polygon/Edge.js";
 import { Vertex } from "./polygon/Vertex.js";
 
+export type Line = { normal: Vec2, offset: number};
+
+export function matRow(line: Line): [number, number, number, number] {
+    return [line.normal.x, line.normal.y, -1, line.offset];
+}
+
 export type Circle = { center: Point, radius: number };
 
 export function clockwiseCircumcircle(a: Point, b: Point, c: Point, eps = 1e-9): Circle | undefined {
@@ -82,9 +88,9 @@ export function edgeEndAndEdge(
     edgeThroughVertex: Edge,
     otherEdge: Edge,
 ): Circle {
-    const ev_n = edgeThroughVertex.normal;
-    const oe_n = otherEdge.normal;
-    const r = (otherEdge.offset - dot(vertex.p, oe_n)) / (dot(ev_n, oe_n) - 1);
+    const ev_n = edgeThroughVertex.line.normal;
+    const oe_n = otherEdge.line.normal;
+    const r = (otherEdge.line.offset - dot(vertex.p, oe_n)) / (dot(ev_n, oe_n) - 1);
     return { center: add(vertex.p, scale(ev_n, r)), radius: r };
 }
 
@@ -93,7 +99,7 @@ export function edgeEndAndVertex(
     edgeThroughVertex: Edge,
     otherVertex: Vertex,
 ): Circle | undefined {
-    const ev_n = edgeThroughVertex.normal;
+    const ev_n = edgeThroughVertex.line.normal;
     const c = sub(otherVertex.p, vertex.p);
     const denom = 2 * dot(c, ev_n);
     if (Math.abs(denom) < 1e-12) {
@@ -107,14 +113,14 @@ export function edgeEndAndVertex(
 
 export function beachSegmentIntersection(e1: Edge | Vertex, e2: Edge | Vertex, sweepY: number): Circle {
     if (e1 instanceof Edge && e2 instanceof Edge) {
-        const [x, y, r] = solve3x3([e1.matRow, e2.matRow, [0, 1, -1, sweepY]]);
+        const [x, y, r] = solve3x3([matRow(e1.line), matRow(e2.line), [0, 1, -1, sweepY]]);
         return { center: { x, y }, radius: r };
     } else if (e1 instanceof Edge && e1.start === e2) {
-        const r = (e2.p.y - sweepY) / (1 - e1.normal.y);
-        return { center: add(e2.p, scale(e1.normal, r)), radius: r };
+        const r = (e2.p.y - sweepY) / (1 - e1.line.normal.y);
+        return { center: add(e2.p, scale(e1.line.normal, r)), radius: r };
     } else if (e2 instanceof Edge && e2.end === e1) {
-        const r = (e1.p.y - sweepY) / (1 - e2.normal.y);
-        return { center: add(e1.p, scale(e2.normal, r)), radius: r };
+        const r = (e1.p.y - sweepY) / (1 - e2.line.normal.y);
+        return { center: add(e1.p, scale(e2.line.normal, r)), radius: r };
     } else if (e1 instanceof Vertex && e2 instanceof Edge) {
         return edgeVertexIntersection(e2, e1, sweepY, true);
     } else if (e1 instanceof Edge && e2 instanceof Vertex) {
@@ -132,7 +138,7 @@ export function beachSegmentIntersection(e1: Edge | Vertex, e2: Edge | Vertex, s
 //               vertex is the right site -> want smaller-x intersection (left boundary)
 // sign = (vx > 0) == vertexOnLeft selects the correct root
 function edgeVertexIntersection(edge: Edge, vertex: Vertex, sweepY: number, vertexOnLeft: boolean): Circle {
-    const [a, b, , c] = edge.matRow;
+    const [a, b, , c] = matRow(edge.line);
     const vx = 1 - b, vy = a;
     const x0 = Math.abs(a) > 1e-12 ? (c - sweepY) / a : 0;
     const y0 = Math.abs(a) > 1e-12 ? 0 : (c - sweepY) / (b - 1);
