@@ -1,4 +1,4 @@
-import { add, dot, Point, scale, sub, Vec2 } from "./Point.js";
+import { add, dot, perp, Point, scale, sub, Vec2 } from "./Point.js";
 import { Edge } from "./polygon/Edge.js";
 import { Vertex } from "./polygon/Vertex.js";
 
@@ -58,11 +58,7 @@ export function parabolaY(p: Point, d: number, x: number): number {
 
 // Finds the point on line l0+t*v equidistant from point p
 // and an edge whose distance at the reference point is r0, changing at rate rv.
-export function circleCenterOnLine(
-    l0: Point, v: Vec2,
-    p: Point,
-    r0: number, rv: number,
-): Circle | undefined {
+export function circleCenterOnLine(l0: Point, v: Vec2, p: Point, r0: number, rv: number): Circle | undefined {
     const d = sub(l0, p);
     const qa = dot(v, v) - rv * rv;
     const qb = 2 * (dot(d, v) - r0 * rv);
@@ -83,22 +79,39 @@ export function circleCenterOnLine(
     return { center: add(l0, scale(v, t)), radius: r };
 }
 
-export function edgeEndAndEdge(
-    vertex: Vertex,
-    edgeThroughVertex: Edge,
-    otherEdge: Edge,
-): Circle {
+export function circleTangentTo2LinesThroughPoint(l1: Line, l2: Line, p: Point): Circle | undefined {
+    const
+        n1 = l1.normal,
+        n2 = l2.normal,
+        d_n = sub(n1, n2),
+        C = l1.offset - l2.offset,
+        v = perp(d_n),
+        l0 = Math.abs(d_n.x) > 1e-12 ? { x: C / d_n.x, y: 0 } : { x: 0, y: C / d_n.y };
+    return circleCenterOnLine(l0, v, p, dot(n1, l0) - l1.offset, dot(n1, v))
+}
+
+export function circleTangentToLineThrough2Points(l: Line, p1: Point, p2: Point): Circle | undefined {
+    const a_n = l.normal,
+      d_n = scale(sub(p2, p1), 2),
+      C = dot(p2, p2) - dot(p1, p1),
+      v = perp(d_n),
+      line_s = Math.abs(d_n.x) > 1e-12 ? { x: C / d_n.x, y: 0 } : { x: 0, y: C / d_n.y }
+      return circleCenterOnLine(line_s, v, p2, dot(a_n, line_s) - l.offset, dot(a_n, v))
+}
+
+
+export function edgeEndAndEdge(vertex: Vertex, edgeThroughVertex: Edge, otherEdge: Edge): Circle | undefined {
     const ev_n = edgeThroughVertex.line.normal;
     const oe_n = otherEdge.line.normal;
     const r = (otherEdge.line.offset - dot(vertex.p, oe_n)) / (dot(ev_n, oe_n) - 1);
+    if (r < 0) {
+        console.log("negative radius in edgeEndAndEdge");
+        return undefined;
+    }
     return { center: add(vertex.p, scale(ev_n, r)), radius: r };
 }
 
-export function edgeEndAndVertex(
-    vertex: Vertex,
-    edgeThroughVertex: Edge,
-    otherVertex: Vertex,
-): Circle | undefined {
+export function edgeEndAndVertex(vertex: Vertex, edgeThroughVertex: Edge, otherVertex: Vertex): Circle | undefined {
     const ev_n = edgeThroughVertex.line.normal;
     const c = sub(otherVertex.p, vertex.p);
     const denom = 2 * dot(c, ev_n);
@@ -155,9 +168,10 @@ function edgeVertexIntersection(edge: Edge, vertex: Vertex, sweepY: number, vert
     return { center: { x, y }, radius: y - sweepY };
 }
 
-export function solve3x3(
-    matrix: readonly (readonly number[])[],
-): [number, number, number] {
+export function solve3x3(matrix: readonly [
+    readonly [number, number, number, number],
+    readonly [number, number, number, number],
+    readonly [number, number, number, number]]): [number, number, number] {
     const m = matrix.map((row) => [...row]);
 
     for (let col = 0; col < 3; col++) {

@@ -14,7 +14,9 @@ import {
   Circle,
   clockwiseCircumcircle,
   edgeEndAndVertex,
-  matRow
+  matRow,
+  circleTangentTo2LinesThroughPoint,
+  circleTangentToLineThrough2Points
 } from "../Geometry.js";
 import { assert } from "../utils.js";
 import { BorderEnd as GenericBorderEnd } from "../BorderEnd.js";
@@ -78,13 +80,7 @@ export class Voronoi {
 
   private checkCircle1V2E(as: Vertex, bs: Edge, cs: Edge, b: BeachSegment): void {
     const
-      b_n = bs.line.normal,
-      c_n = cs.line.normal,
-      d_n = sub(b_n, c_n),
-      C = bs.line.offset - cs.line.offset,
-      v = perp(d_n),
-      line_s = Math.abs(d_n.x) > 1e-12 ? { x: C / d_n.x, y: 0 } : { x: 0, y: C / d_n.y },
-      circle = circleCenterOnLine(line_s, v, as.p, dot(b_n, line_s) - bs.line.offset, dot(b_n, v))
+      circle = circleTangentTo2LinesThroughPoint(bs.line, cs.line, as.p);
     if (circle) {
       if (as.inCone(circle.center)) {
         this.emitCircle(circle, b);
@@ -95,12 +91,7 @@ export class Voronoi {
   }
 
   private checkCircle1E2V(as: Edge, bs: Vertex, cs: Vertex, b: BeachSegment,): void {
-    const a_n = as.line.normal,
-      d_n = scale(sub(cs.p, bs.p), 2),
-      C = dot(cs.p, cs.p) - dot(bs.p, bs.p),
-      v = perp(d_n),
-      line_s = Math.abs(d_n.x) > 1e-12 ? { x: C / d_n.x, y: 0 } : { x: 0, y: C / d_n.y },
-      circle = circleCenterOnLine(line_s, v, bs.p, dot(a_n, line_s) - as.line.offset, dot(a_n, v))
+    const circle = circleTangentToLineThrough2Points(as.line, bs.p, cs.p);
     if (circle) {
       if (bs.inCone(circle.center) && cs.inCone(circle.center)) {
         this.emitCircle(circle, b);
@@ -125,7 +116,8 @@ export class Voronoi {
     // ─────────────────────────────── VEE ───────────────────────────────
     else if (as instanceof Vertex && bs instanceof Edge && cs instanceof Edge) {
       if (bs.end === as) {
-        this.emitCircle(edgeEndAndEdge(as, bs, cs), b);
+        const circle = edgeEndAndEdge(as, bs, cs)
+        if (circle) this.emitCircle(circle, b);
       } else {
         this.checkCircle1V2E(as, cs, bs, b);
       }
@@ -135,9 +127,11 @@ export class Voronoi {
       if (as.start === bs && cs.end === bs) {
         //reflex vertex between its own edges: no circle event
       } else if (as.start === bs) {
-        this.emitCircle(edgeEndAndEdge(bs, as, cs), b);
+        const circle = edgeEndAndEdge(bs, as, cs);
+        if (circle) this.emitCircle(circle, b);
       } else if (cs.end === bs) {
-        this.emitCircle(edgeEndAndEdge(bs, cs, as), b);
+        const circle = edgeEndAndEdge(bs, cs, as);
+        if (circle) this.emitCircle(circle, b);
       } else {
         this.checkCircle1V2E(bs, as, cs, b);
       }
@@ -145,7 +139,8 @@ export class Voronoi {
     // ─────────────────────────────── EEV ───────────────────────────────
     else if (as instanceof Edge && bs instanceof Edge && cs instanceof Vertex) {
       if (bs.start === cs) {
-        this.emitCircle(edgeEndAndEdge(cs, bs, as), b);
+        const circle = edgeEndAndEdge(cs, bs, as)
+        if (circle) this.emitCircle(circle, b);
       } else {
         this.checkCircle1V2E(cs, bs, as, b);
       }
