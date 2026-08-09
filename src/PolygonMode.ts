@@ -1,4 +1,5 @@
-import { beachSegmentIntersection, parabolaIntersection, parabolaY } from "./Geometry.js";
+import { parabolaIntersection, parabolaY } from "./Geometry.js";
+import { beachSegmentIntersection } from "./polygon/Voronoi.js";
 import { dot, Point } from "./Point.js";
 import type { SiteMode } from "./SiteMode.js";
 import {

@@ -99,58 +99,33 @@ export function circleTangentToLineThrough2Points(l: Line, p1: Point, p2: Point)
       return circleCenterOnLine(line_s, v, p2, dot(a_n, line_s) - l.offset, dot(a_n, v))
 }
 
-
-export function edgeEndAndEdge(vertex: Vertex, edgeThroughVertex: Edge, otherEdge: Edge): Circle | undefined {
-    const ev_n = edgeThroughVertex.line.normal;
-    const oe_n = otherEdge.line.normal;
-    const r = (otherEdge.line.offset - dot(vertex.p, oe_n)) / (dot(ev_n, oe_n) - 1);
+export function LineThroughPointAndLine(point:Point, lineThroughPoint: Line, otherLine: Line): Circle | undefined {
+    const ev_n = lineThroughPoint.normal;
+    const oe_n = otherLine.normal;
+    const r = (otherLine.offset - dot(point, oe_n)) / (dot(ev_n, oe_n) - 1);
     if (r < 0) {
-        console.log("negative radius in edgeEndAndEdge");
+        console.log("negative radius in LineThroughPointAndLine");
         return undefined;
     }
-    return { center: add(vertex.p, scale(ev_n, r)), radius: r };
+    return { center: add(point, scale(ev_n, r)), radius: r };
 }
 
-export function edgeEndAndVertex(vertex: Vertex, edgeThroughVertex: Edge, otherVertex: Vertex): Circle | undefined {
+export function edgeThroughVertexAndVertex(vertex: Vertex, edgeThroughVertex: Edge, otherVertex: Vertex): Circle | undefined {
     const ev_n = edgeThroughVertex.line.normal;
     const c = sub(otherVertex.p, vertex.p);
     const denom = 2 * dot(c, ev_n);
     if (Math.abs(denom) < 1e-12) {
-        console.log("Denominator too small in edgeEndAndVertex");
+        console.log("Denominator too small in edgeThroughVertexAndVertex");
         return undefined;
     }
     const r = dot(c, c) / denom;
     return { center: add(vertex.p, scale(ev_n, r)), radius: r };
 }
 
-
-export function beachSegmentIntersection(e1: Edge | Vertex, e2: Edge | Vertex, sweepY: number): Circle {
-    if (e1 instanceof Edge && e2 instanceof Edge) {
-        const [x, y, r] = solve3x3([matRow(e1.line), matRow(e2.line), [0, 1, -1, sweepY]]);
-        return { center: { x, y }, radius: r };
-    } else if (e1 instanceof Edge && e1.start === e2) {
-        const r = (e2.p.y - sweepY) / (1 - e1.line.normal.y);
-        return { center: add(e2.p, scale(e1.line.normal, r)), radius: r };
-    } else if (e2 instanceof Edge && e2.end === e1) {
-        const r = (e1.p.y - sweepY) / (1 - e2.line.normal.y);
-        return { center: add(e1.p, scale(e2.line.normal, r)), radius: r };
-    } else if (e1 instanceof Vertex && e2 instanceof Edge) {
-        return edgeVertexIntersection(e2, e1, sweepY, true);
-    } else if (e1 instanceof Edge && e2 instanceof Vertex) {
-        return edgeVertexIntersection(e1, e2, sweepY, false);
-    } else if (e1 instanceof Vertex && e2 instanceof Vertex) {
-        const x = parabolaIntersection(e1.p, e2.p, sweepY);
-        const y = parabolaY(e1.p, sweepY, x);
-        return { center: { x, y }, radius: y - sweepY };
-    } else {
-        throw new Error("Invalid arguments for beachSegmentIntersection");
-    }
-}
-
 // vertexOnLeft: vertex is the left site -> want larger-x intersection (right boundary of vertex's arc)
 //               vertex is the right site -> want smaller-x intersection (left boundary)
 // sign = (vx > 0) == vertexOnLeft selects the correct root
-function edgeVertexIntersection(edge: Edge, vertex: Vertex, sweepY: number, vertexOnLeft: boolean): Circle {
+export function edgeVertexIntersection(edge: Edge, vertex: Vertex, sweepY: number, vertexOnLeft: boolean): Circle {
     const [a, b, , c] = matRow(edge.line);
     const vx = 1 - b, vy = a;
     const x0 = Math.abs(a) > 1e-12 ? (c - sweepY) / a : 0;
